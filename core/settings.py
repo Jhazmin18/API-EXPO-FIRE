@@ -90,26 +90,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # Database configuration for Render (PostgreSQL)
-if os.getenv('DATABASE_URL'):
-    # En producción (Render) usamos la URL de la base de datos
-    DATABASES = {
-        'default': dj_database_url.config(
-            conn_max_age=600,
-            ssl_require=True  # Render requiere SSL
-        )
-    }
-else:
-    # En desarrollo local usamos PostgreSQL normal
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql_psycopg2',
-            'NAME': os.getenv('DB_NAME', 'extintores'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'posgres'),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-        }
-    }
+
+# En producción (Render) usamos la URL de la base de datos
+DATABASES = {
+    'default': dj_database_url.config(
+        conn_max_age=600,
+        ssl_require=True  # Render requiere SSL
+    )
+}
+
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
