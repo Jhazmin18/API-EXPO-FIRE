@@ -42,12 +42,17 @@ class Extintor(models.Model):
     
     AGENTE_CHOICES = [
         ('PQS_ABC', 'Polvo químico seco ABC'),
-        ('PQS_BC', 'Polvo químico seco BC'),
         ('CO2', 'CO2'),
         ('AGUA', 'Agua'),
         ('ESPUMA', 'Espuma'),
-        ('HALOTRON', 'Halotrón'),
         ('ACETATO_K', 'Acetato de potasio'),
+        ('COLD_FIRE', 'Cold Fire'),
+        ('CLASE_D', 'Clase D - cloruro de sodio'),
+    ]
+
+    MODALIDAD_CHOICES = [
+        ('portatil', 'Portátil'),
+        ('movil', 'Móvil'),
     ]
     
     # Campos principales
@@ -76,6 +81,22 @@ class Extintor(models.Model):
         choices=AGENTE_CHOICES,
         default='PQS_ABC',
         verbose_name='Agente Extintor'
+    )
+
+    modalidad = models.CharField(
+        max_length=20,
+        choices=MODALIDAD_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='Modalidad'
+    )
+
+    clase_fuego = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        verbose_name='Clase de fuego',
+        help_text='Clases de fuego que apaga el agente, separadas por coma. Ej: A,B,C'
     )
     
     capacidad = models.CharField(

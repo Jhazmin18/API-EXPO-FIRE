@@ -27,6 +27,7 @@ class ExtintorAdmin(admin.ModelAdmin):
         'ubicacion',
         'empresa',
         'tipo',
+        'modalidad',
         'capacidad',
         'get_estado_display',
         'fecha_vencimiento',
@@ -37,6 +38,7 @@ class ExtintorAdmin(admin.ModelAdmin):
     list_filter = [
         'empresa',
         'tipo',
+        'modalidad',
         'fecha_vencimiento',
         'proxima_revision',
         'created_at',
@@ -68,6 +70,8 @@ class ExtintorAdmin(admin.ModelAdmin):
                 'empresa',
                 'ubicacion',
                 'tipo',
+                'modalidad',
+                'clase_fuego',
                 'capacidad',
             )
         }),
