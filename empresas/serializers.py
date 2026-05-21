@@ -43,6 +43,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
     creado_por_email = serializers.EmailField(source='creado_por.email', read_only=True)
     creado_por_rol = serializers.SerializerMethodField()
     contactos = ContactoSerializer(many=True, read_only=True)
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Empresa
@@ -52,6 +53,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
             'nombre',
             'razon_social',
             'logo',
+            'logo_url',
             'tipo_inmueble',
             'activa',
             'created_at',
@@ -100,6 +102,14 @@ class EmpresaSerializer(serializers.ModelSerializer):
                     'nombre': perfil.get_rol_display()
                 }
         return None
+
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.logo.url)
+        return obj.logo.url
 
 
 class EmpresaCreacionSerializer(serializers.ModelSerializer):
