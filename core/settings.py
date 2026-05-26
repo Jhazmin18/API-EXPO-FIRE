@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'empresas.apps.EmpresasConfig',
     'usuarios.apps.UsuariosConfig',
     'forms.apps.FormsConfig',
+    'reportes.apps.ReportesConfig',
     'dashboard', 
 ]
 
