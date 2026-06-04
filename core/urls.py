@@ -11,10 +11,9 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
-from usuarios.views import PerfilDetailView
+from usuarios.views import CustomTokenObtainPairView, PerfilDetailView
 
 urlpatterns = [
     # Django Admin
@@ -29,7 +28,7 @@ urlpatterns = [
     path('', include('extintores.urls')),
     
     # Autenticación JWT
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('empresas/', include('empresas.urls')),
     path('forms/', include('forms.urls')),

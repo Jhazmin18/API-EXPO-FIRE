@@ -171,6 +171,14 @@ class ContactoViewSet(viewsets.ModelViewSet):
     
     queryset = Contacto.objects.select_related('empresa').all()
     serializer_class = ContactoSerializer
+
+    def perform_create(self, serializer):
+        empresa_id = self.kwargs.get('empresa_pk') or self.request.data.get('empresa_id')
+        if empresa_id:
+            empresa = Empresa.objects.get(id=empresa_id)
+            serializer.save(empresa=empresa)
+            return
+        serializer.save()
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -182,7 +190,10 @@ class ContactoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filtra contactos por empresa si se proporciona el parámetro"""
         queryset = super().get_queryset()
-        empresa_id = self.request.query_params.get('empresa_id')
+        empresa_id = (
+            self.kwargs.get('empresa_pk')
+            or self.request.query_params.get('empresa_id')
+        )
         
         if empresa_id:
             queryset = queryset.filter(empresa_id=empresa_id)
