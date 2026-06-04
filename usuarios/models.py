@@ -63,7 +63,28 @@ class Perfil(models.Model):
         default=ROLE_ANALISTA,
         verbose_name='Rol'
     )
-    created_at = models.DateTimeField(
+
+    requiere_cambio_password = models.BooleanField(
+        default=False,
+        verbose_name='Requiere cambio de contraseña'
+    )
+
+    reset_password_solicitado_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de solicitud de reseteo'
+    )
+
+    reset_password_solicitado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resets_password_solicitados',
+        verbose_name='Reseteo solicitado por'
+    )
+
+    created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Fecha de creaciÃ³n'
     )

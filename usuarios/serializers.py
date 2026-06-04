@@ -2,6 +2,7 @@
 Serializadores para el dominio de usuarios.
 """
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import Perfil
@@ -46,10 +47,22 @@ class PerfilSerializer(serializers.ModelSerializer):
             'rol',
             'telefono',
             'domicilio',
+            'requiere_cambio_password',
+            'reset_password_solicitado_at',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'user', 'username', 'email', 'created_at', 'updated_at', 'empresa']
+        read_only_fields = [
+            'id',
+            'user',
+            'username',
+            'email',
+            'requiere_cambio_password',
+            'reset_password_solicitado_at',
+            'created_at',
+            'updated_at',
+            'empresa',
+        ]
 
     def get_foto_perfil(self, obj):
         """
@@ -122,3 +135,22 @@ class PerfilCreateSerializer(serializers.Serializer):
             domicilio=domicilio,
         )
         return perfil
+
+
+class SolicitarResetPasswordSerializer(serializers.Serializer):
+    motivo = serializers.CharField(required=False, allow_blank=True)
+
+
+class CambiarMiPasswordSerializer(serializers.Serializer):
+    password_actual = serializers.CharField(write_only=True)
+    password_nueva = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_password_actual(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("La contraseña actual no es correcta.")
+        return value
+
+    def validate_password_nueva(self, value):
+        validate_password(value, self.context['request'].user)
+        return value

@@ -9,6 +9,7 @@ class ContactoSerializer(serializers.ModelSerializer):
         model = Contacto
         fields = [
             'id',
+            'empresa_id',
             'nombre',
             'cargo',
             'correo_principal',
@@ -18,7 +19,7 @@ class ContactoSerializer(serializers.ModelSerializer):
             'domicilio',
             'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'empresa_id', 'created_at']
 
 
 class ContactoCreacionSerializer(serializers.ModelSerializer):
