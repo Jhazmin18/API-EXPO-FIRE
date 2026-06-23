@@ -31,6 +31,23 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production-
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
+
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'webmaster@localhost')
+LEADS_TO_EMAIL = [
+    email.strip()
+    for email in os.getenv('LEADS_TO_EMAIL', 'anayajhaz18@gmail.com').split(',')
+    if email.strip()
+]
 
 
 # Application definition
@@ -55,6 +72,7 @@ INSTALLED_APPS = [
     'usuarios.apps.UsuariosConfig',
     'forms.apps.FormsConfig',
     'reportes.apps.ReportesConfig',
+    'leads.apps.LeadsConfig',
     'dashboard', 
 ]
 

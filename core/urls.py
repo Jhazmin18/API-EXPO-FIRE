@@ -30,6 +30,7 @@ urlpatterns = [
     # Autenticación JWT
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/', include('leads.urls')),
     path('empresas/', include('empresas.urls')),
     path('forms/', include('forms.urls')),
     path('dashboard/', include('dashboard.urls')),
