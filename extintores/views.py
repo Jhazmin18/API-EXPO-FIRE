@@ -161,6 +161,7 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         
         data = {
             'total': extintores.count(),
+            'empresas_activas': Empresa.objects.filter(activa=True).count(),
             'por_estado': estados,
             'por_tipo': tipos,
         }

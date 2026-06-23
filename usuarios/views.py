@@ -8,7 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -146,13 +146,26 @@ class PerfilViewSet(viewsets.ModelViewSet):
         return PerfilSerializer
 
     def get_permissions(self):
-        if self.action == 'create':
-            permission_classes = [IsAuthenticated, IsAdminUser]
-        else:
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]
+        return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
+        perfil_solicitante = getattr(request.user, 'perfil', None)
+        puede_crear = (
+            request.user.is_superuser
+            or (
+                perfil_solicitante
+                and perfil_solicitante.rol in [
+                    Perfil.ROLE_SUPERADMIN,
+                    Perfil.ROLE_ADMIN_EMPRESA,
+                ]
+            )
+        )
+        if not puede_crear:
+            return Response(
+                {'detail': 'No tienes permiso para crear usuarios.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         perfil = serializer.save()

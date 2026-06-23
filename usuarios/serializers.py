@@ -95,6 +95,37 @@ class PerfilCreateSerializer(serializers.Serializer):
     telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
     domicilio = serializers.CharField(required=False, allow_blank=True, max_length=250)
 
+    def validate(self, attrs):
+        request = self.context.get('request')
+        perfil_solicitante = getattr(request.user, 'perfil', None) if request else None
+
+        if request and request.user.is_superuser:
+            return attrs
+
+        if perfil_solicitante and perfil_solicitante.rol == Perfil.ROLE_SUPERADMIN:
+            return attrs
+
+        if perfil_solicitante and perfil_solicitante.rol == Perfil.ROLE_ADMIN_EMPRESA:
+            if attrs['rol'] not in [Perfil.ROLE_SUPERVISOR, Perfil.ROLE_ANALISTA]:
+                raise serializers.ValidationError({
+                    'rol': 'ADMIN_EMPRESA solo puede crear supervisores y analistas.'
+                })
+            if not perfil_solicitante.empresa_id:
+                raise serializers.ValidationError({
+                    'empresa_id': 'El administrador no tiene una empresa asignada.'
+                })
+
+            empresa_id = attrs.get('empresa_id')
+            if empresa_id and empresa_id != perfil_solicitante.empresa_id:
+                raise serializers.ValidationError({
+                    'empresa_id': 'Solo puedes crear usuarios para tu propia empresa.'
+                })
+
+            attrs['empresa_id'] = perfil_solicitante.empresa_id
+            return attrs
+
+        raise serializers.ValidationError('No tienes permiso para crear usuarios.')
+
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Ya existe un usuario con este username.")
