@@ -115,7 +115,12 @@ class EmpresaSerializer(serializers.ModelSerializer):
 
 class EmpresaCreacionSerializer(serializers.ModelSerializer):
     """Serializer especial para crear empresa con contactos iniciales"""
-    contactos = ContactoCreacionSerializer(many=True, write_only=True)
+    contactos = ContactoCreacionSerializer(
+        many=True,
+        write_only=True,
+        required=False,
+        allow_empty=True,
+    )
     
     class Meta:
         model = Empresa
