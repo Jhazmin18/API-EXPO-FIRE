@@ -101,27 +101,34 @@ class LeadCreateView(APIView):
         if not value:
             return None
         return parse_datetime(value)
-
     def _send_lead_email(self, lead):
-        recipients = getattr(settings, 'LEADS_TO_EMAIL', [])
-        if not recipients:
-            lead.email_error = 'No se configuró LEADS_TO_EMAIL.'
-            lead.save(update_fields=['email_error'])
-            return
+            recipients = getattr(settings, 'LEADS_TO_EMAIL', [])
+            if not recipients:
+                lead.email_error = 'No se configuró LEADS_TO_EMAIL.'
+                lead.save(update_fields=['email_error'])
+                return
 
-        try:
-            sent = send_mail(
-                f'Nuevo lead: {lead.nombre} - {lead.empresa}',
-                f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}',
-                settings.DEFAULT_FROM_EMAIL,
-                recipients,
-                fail_silently=False,
-            )
-            lead.email_enviado = sent > 0
-            lead.email_enviado_at = timezone.now() if lead.email_enviado else None
-            lead.email_error = '' if lead.email_enviado else 'El proveedor no confirmó el envío.'
-        except Exception as exc:
-            lead.email_enviado = False
-            lead.email_error = str(exc)[:2000]
+            # Asegúrate de que apunte a una lista si en tus variables pusiste un solo string separado por comas
+            if isinstance(recipients, str):
+                recipients = [email.strip() for email in recipients.split(',')]
 
-        lead.save(update_fields=['email_enviado', 'email_enviado_at', 'email_error'])
+            try:
+                sent = send_mail(
+                    f'Nuevo lead: {lead.nombre} - {lead.empresa}',
+                    f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    recipients,
+                    fail_silently=True,  # <-- CAMBIADO A TRUE: Evita que Render mate el contenedor por Timeout
+                )
+                
+                # Si sent es > 0 significa que se envió. Si es 0, falló pero no rompió la app.
+                lead.email_enviado = sent > 0
+                lead.email_enviado_at = timezone.now() if lead.email_enviado else None
+                lead.email_error = '' if lead.email_enviado else 'Timeout o rechazo del servidor SMTP (Gmail).'
+                
+            except Exception as exc:
+                # Esta línea ahora solo se ejecutará si hay un error interno de Django, no de red
+                lead.email_enviado = False
+                lead.email_error = str(exc)[:2000]
+
+            lead.save(update_fields=['email_enviado', 'email_enviado_at', 'email_error'])
