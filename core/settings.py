@@ -176,6 +176,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # Agregar orígenes desde variable de entorno (para producción)
+CORS_ALLOWED_ORIGINS.extend([
+    'https://exprofire.com',
+    'https://www.exprofire.com',
+])
+
 if os.getenv('CORS_ALLOWED_ORIGINS'):
     CORS_ALLOWED_ORIGINS.extend(os.getenv('CORS_ALLOWED_ORIGINS').split(','))
 
