@@ -115,7 +115,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database Configuration - Forzando la conexión externa pública directamente
 if not DEBUG or os.getenv('RAILWAY_ENVIRONMENT_NAME'): # Si está ejecutándose en Railway
     DATABASES = {
-        'default': dj_database_url.parse('postgresql://postgres:dkwEqgfeFcNXGhoNnLmkyEosizZRySNW@reseau.proxy.rlwy.net:20356/railway')
+        'default': dj_database_url.parse('postgresql://postgres:IPZsDDDZmhuLGPgXtwkzTtcWmtzGjJqX@acela.proxy.rlwy.net:55745/railway')
     }
     # Aseguramos que use pool de conexiones y SSL
     DATABASES['default']['CONN_MAX_AGE'] = 600
