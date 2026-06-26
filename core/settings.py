@@ -112,24 +112,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 # 1. Intentamos leer la URL pública externa para saltarnos la red interna caída
-if os.getenv('DATABASE_PUBLIC_URL'):
+# Database Configuration - Forzando la conexión externa pública directamente
+if not DEBUG or os.getenv('RAILWAY_ENVIRONMENT_NAME'): # Si está ejecutándose en Railway
     DATABASES = {
-        'default': dj_database_url.config(
-            default=os.getenv('DATABASE_PUBLIC_URL'),
-            conn_max_age=600,
-            ssl_require=True
-        )
+        'default': dj_database_url.parse('postgresql://postgres:dkwEqgfeFcNXGhoNnLmkyEosizZRySNW@reseau.proxy.rlwy.net:20356/railway')
     }
-# 2. Si no está, intentamos con la estándar
-elif os.getenv('DATABASE_URL'):
-    DATABASES = {
-        'default': dj_database_url.config(
-            conn_max_age=600,
-            ssl_require=True
-        )
-    }
-# 3. Local fallback
+    # Aseguramos que use pool de conexiones y SSL
+    DATABASES['default']['CONN_MAX_AGE'] = 600
+    DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 else:
+    # Tu entorno local normal
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
