@@ -110,15 +110,25 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # Database configuration for Local and Production (Railway/Render)cccc
 
-# Si Railway o Render inyectan DATABASE_URL, la usamos. Si no, cae en SQLite local.
-if os.getenv('DATABASE_URL'):
+
+# 1. Intentamos leer la URL pública externa para saltarnos la red interna caída
+if os.getenv('DATABASE_PUBLIC_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_PUBLIC_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
+# 2. Si no está, intentamos con la estándar
+elif os.getenv('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(
             conn_max_age=600,
-            # Esto permite usar SSL si está disponible, pero no rompe si no se requiere internamente
-            ssl_require=False if 'railway.internal' in os.getenv('DATABASE_URL', '') else True
+            ssl_require=True
         )
     }
+# 3. Local fallback
 else:
     DATABASES = {
         'default': {
