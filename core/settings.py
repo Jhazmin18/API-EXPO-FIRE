@@ -108,14 +108,15 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 # Database
-# Database configuration for Local and Production (Railway/Render)
+# Database configuration for Local and Production (Railway/Render)cccc
 
 # Si Railway o Render inyectan DATABASE_URL, la usamos. Si no, cae en SQLite local.
 if os.getenv('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(
             conn_max_age=600,
-            ssl_require=True
+            # Esto permite usar SSL si está disponible, pero no rompe si no se requiere internamente
+            ssl_require=False if 'railway.internal' in os.getenv('DATABASE_URL', '') else True
         )
     }
 else:
@@ -125,7 +126,6 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
