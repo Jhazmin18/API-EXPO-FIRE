@@ -108,16 +108,23 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 # Database
-# Database configuration for Render (PostgreSQL)
+# Database configuration for Local and Production (Railway/Render)
 
-# En producción (Render) usamos la URL de la base de datos
-DATABASES = {
-    'default': dj_database_url.config(
-        conn_max_age=600,
-        ssl_require=True  # Render requiere SSL
-    )
-}
-
+# Si Railway o Render inyectan DATABASE_URL, la usamos. Si no, cae en SQLite local.
+if os.getenv('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
