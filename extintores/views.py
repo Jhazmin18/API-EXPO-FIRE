@@ -16,6 +16,7 @@ from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 from .models import Extintor
 from empresas.models import Empresa
+from usuarios.models import Perfil
 from .serializers import (
     ExtintorSerializer,
     ExtintorListSerializer,
@@ -56,11 +57,15 @@ class ExtintorViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if self.action != 'por_codigo':
+            queryset = self._filter_queryset_by_user_company(queryset)
+
         empresa = self.request.query_params.get('empresa')
         if empresa:
-            queryset = queryset.filter(
-                Q(empresa__id=empresa) | Q(empresa__nombre__iexact=empresa)
-            )
+            empresa_filter = Q(empresa__nombre__iexact=empresa)
+            if str(empresa).isdigit():
+                empresa_filter |= Q(empresa__id=empresa)
+            queryset = queryset.filter(empresa_filter)
         
         # --- NUEVO: Filtrar por creador ---
         creado_por = self.request.query_params.get('creado_por')
@@ -68,6 +73,27 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(creado_por_id=creado_por)
         
         return queryset
+
+    def _filter_queryset_by_user_company(self, queryset):
+        user = self.request.user
+        perfil = getattr(user, 'perfil', None)
+
+        if user.is_superuser:
+            return queryset
+
+        if perfil and perfil.rol == Perfil.ROLE_SUPERADMIN:
+            return queryset
+
+        if perfil and perfil.rol in [
+            Perfil.ROLE_ADMIN_EMPRESA,
+            Perfil.ROLE_SUPERVISOR,
+            Perfil.ROLE_ANALISTA,
+        ]:
+            if perfil.empresa_id:
+                return queryset.filter(empresa_id=perfil.empresa_id)
+            return queryset.none()
+
+        return queryset.none()
 
     def get_permissions(self):
         """
@@ -87,6 +113,19 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         """
         Asigna automáticamente el usuario autenticado como creador del extintor.
         """
+        perfil = getattr(self.request.user, 'perfil', None)
+        if (
+            not self.request.user.is_superuser
+            and perfil
+            and perfil.rol in [
+                Perfil.ROLE_ADMIN_EMPRESA,
+                Perfil.ROLE_SUPERVISOR,
+                Perfil.ROLE_ANALISTA,
+            ]
+        ):
+            serializer.save(creado_por=self.request.user, empresa=perfil.empresa)
+            return
+
         serializer.save(creado_por=self.request.user)
     
     @action(detail=False, methods=['get'], url_path='por-codigo/(?P<codigo>[^/.]+)')

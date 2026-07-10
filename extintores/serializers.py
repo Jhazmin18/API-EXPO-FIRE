@@ -194,8 +194,8 @@ class ExtintorCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        empresa = validated_data.pop('empresa', None)
         empresa_id = validated_data.pop('empresa_id', None)
-        empresa = None
         if empresa_id:
             empresa = Empresa.objects.filter(id=empresa_id).first()
             if not empresa:

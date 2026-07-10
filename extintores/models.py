@@ -265,21 +265,90 @@ class Extintor(models.Model):
         return f"{self.QR_BASE_URL}{self.codigo}"
 
     def _build_label_image(self):
+        # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
+        label_width = 620
+        label_height = 224
+        margin = 12
+        gap = 14
+
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
-        qr.save(qr_buffer, kind='png', scale=8, border=2, dark='#0c2340', light='white')
+        qr.save(qr_buffer, kind='png', scale=7, border=4, dark='#000000', light='white')
         qr_buffer.seek(0)
-        img = Image.open(qr_buffer).convert('RGB')
-        label_height = 90
-        combined = Image.new('RGB', (img.width, img.height + label_height), 'white')
-        combined.paste(img, (0, 0))
+        qr_img = Image.open(qr_buffer).convert('RGB')
+
+        qr_size = label_height - (margin * 2)
+        try:
+            resample_filter = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample_filter = Image.LANCZOS
+        qr_img = qr_img.resize((qr_size, qr_size), resample_filter)
+
+        combined = Image.new('RGB', (label_width, label_height), 'white')
+        combined.paste(qr_img, (margin, margin))
+
         draw = ImageDraw.Draw(combined)
-        font = ImageFont.load_default()
-        draw.text((10, img.height + 5), f"{self.codigo} - {self.get_tipo_display()}", fill='#102347', font=font)
-        draw.text((10, img.height + 25), f"Ubicación: {self.ubicacion}", fill='gray', font=font)
-        draw.text((10, img.height + 40), f"Capacidad: {self.capacidad}", fill='gray', font=font)
+        try:
+            title_font = ImageFont.truetype('arialbd.ttf', 28)
+            text_font = ImageFont.truetype('arial.ttf', 20)
+            small_font = ImageFont.truetype('arial.ttf', 18)
+        except OSError:
+            title_font = ImageFont.load_default()
+            text_font = ImageFont.load_default()
+            small_font = ImageFont.load_default()
+
+        text_x = margin + qr_size + gap
+        text_width = label_width - text_x - margin
+        y = margin + 6
+
+        def truncate_text(text, font, max_width):
+            text = str(text or '')
+            if draw.textlength(text, font=font) <= max_width:
+                return text
+            ellipsis = '...'
+            while text and draw.textlength(f'{text}{ellipsis}', font=font) > max_width:
+                text = text[:-1]
+            return f'{text}{ellipsis}' if text else ellipsis
+
+        draw.text(
+            (text_x, y),
+            truncate_text(self.codigo, title_font, text_width),
+            fill='#102347',
+            font=title_font,
+        )
+
+        y += 42
+        draw.text(
+            (text_x, y),
+            truncate_text(self.get_tipo_display(), text_font, text_width),
+            fill='#333333',
+            font=text_font,
+        )
+
+        y += 32
+        draw.text(
+            (text_x, y),
+            truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
+            fill='#555555',
+            font=small_font,
+        )
+
+        y += 30
+        draw.text(
+            (text_x, y),
+            truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
+            fill='#555555',
+            font=small_font,
+        )
+
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        draw.text((10, img.height + 55), f"Vence: {fecha_venc}", fill='gray', font=font)
+        y += 30
+        draw.text(
+            (text_x, y),
+            truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
+            fill='#555555',
+            font=small_font,
+        )
         return combined
 
     def obtener_etiqueta_png(self):
