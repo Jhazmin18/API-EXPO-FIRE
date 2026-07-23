@@ -2,23 +2,48 @@
 Vistas enfocadas en usuarios.
 """
 
+from urllib.parse import urlencode
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Perfil
 from .serializers import (
     CambiarMiPasswordSerializer,
+    ConfirmarOlvidePasswordSerializer,
     PerfilSerializer,
     PerfilCreateSerializer,
+    SolicitarOlvidePasswordSerializer,
     SolicitarResetPasswordSerializer,
 )
+
+User = get_user_model()
+
+
+def _build_password_reset_link(user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    base_url = getattr(settings, 'PASSWORD_RESET_FRONTEND_URL', '').strip()
+
+    if not base_url:
+        base_url = 'http://localhost:4200/olvide-password'
+
+    separator = '&' if '?' in base_url else '?'
+    query = urlencode({'uid': uid, 'token': token})
+    return f"{base_url}{separator}{query}"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -58,6 +83,88 @@ class PerfilDetailView(APIView):
         )
         serializer = PerfilSerializer(perfil, context={'request': request})
         return Response(serializer.data)
+
+
+class SolicitarOlvidePasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SolicitarOlvidePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email'].strip().lower()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+
+        if user:
+            reset_link = _build_password_reset_link(user)
+            try:
+                send_mail(
+                    subject='Restablece tu contrasena',
+                    message=(
+                        'Hemos recibido una solicitud para restablecer tu contrasena.\n\n'
+                        f'Abre este enlace para continuar:\n{reset_link}\n\n'
+                        'Si no solicitaste este cambio, puedes ignorar este correo.'
+                    ),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                return Response(
+                    {
+                        'detail': (
+                            'Encontramos el usuario, pero no fue posible enviar el correo. '
+                            'Revisa la configuracion SMTP.'
+                        )
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        return Response({
+            'detail': 'Si el correo existe, te enviaremos un enlace para restablecer la contrasena.'
+        })
+
+
+class ConfirmarOlvidePasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ConfirmarOlvidePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        uid = serializer.validated_data['uid']
+        token = serializer.validated_data['token']
+
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response(
+                {'detail': 'El enlace de restablecimiento no es válido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {'detail': 'El enlace de restablecimiento no es válido o ya expiró.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(serializer.validated_data['password'])
+        user.save(update_fields=['password'])
+
+        perfil, _ = Perfil.objects.get_or_create(user=user)
+        perfil.requiere_cambio_password = False
+        perfil.reset_password_solicitado_at = None
+        perfil.reset_password_solicitado_por = None
+        perfil.save(update_fields=[
+            'requiere_cambio_password',
+            'reset_password_solicitado_at',
+            'reset_password_solicitado_por',
+            'updated_at',
+        ])
+
+        return Response({'detail': 'Contraseña actualizada correctamente.'})
 
 
 class EquipoEmpresaView(APIView):
@@ -298,3 +405,4 @@ class PerfilViewSet(viewsets.ModelViewSet):
                 and perfil_solicitante.empresa_id == perfil_objetivo.empresa_id
             )
         return False
+

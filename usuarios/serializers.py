@@ -185,3 +185,23 @@ class CambiarMiPasswordSerializer(serializers.Serializer):
     def validate_password_nueva(self, value):
         validate_password(value, self.context['request'].user)
         return value
+
+
+class SolicitarOlvidePasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class ConfirmarOlvidePasswordSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    password_confirmacion = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirmacion']:
+            raise serializers.ValidationError({
+                'password_confirmacion': 'Las contraseñas no coinciden.'
+            })
+
+        validate_password(attrs['password'])
+        return attrs

@@ -13,11 +13,19 @@ from django.conf.urls.static import static
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from usuarios.views import CustomTokenObtainPairView, PerfilDetailView
+from usuarios.views import (
+    ConfirmarOlvidePasswordView,
+    CustomTokenObtainPairView,
+    PerfilDetailView,
+    SolicitarOlvidePasswordView,
+)
 
 urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
+    # Recuperación de contraseña
+    path('olvide-password/', SolicitarOlvidePasswordView.as_view(), name='olvide-password'),
+    path('reestablecer-password/', ConfirmarOlvidePasswordView.as_view(), name='reestablecer-password'),
     # Perfil del usuario autenticado
     path('api/perfil/', PerfilDetailView.as_view(), name='perfil-detail'),
 
