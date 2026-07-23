@@ -2,6 +2,7 @@
 Vistas enfocadas en usuarios.
 """
 
+import logging
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -31,6 +32,7 @@ from .serializers import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _build_password_reset_link(user):
@@ -112,6 +114,7 @@ class SolicitarOlvidePasswordView(APIView):
                     connection=connection,
                 )
             except Exception as exc:
+                logger.exception("Error enviando correo de restablecimiento: %s", exc)
                 return Response(
                     {
                         'detail': (
