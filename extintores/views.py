@@ -289,6 +289,19 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         extintor = self.get_object()
         buffer = extintor.obtener_etiqueta_png()
         return HttpResponse(buffer.getvalue(), content_type='image/png')
+
+    @action(detail=True, methods=['post'], url_path='regenerar-qr')
+    def regenerar_qr(self, request, pk=None):
+        """
+        Regenera el QR del extintor usando la URL actual configurada.
+        """
+        extintor = self.get_object()
+        extintor.regenerar_qr()
+        serializer = self.get_serializer(extintor)
+        return Response({
+            'detail': 'QR regenerado correctamente.',
+            'extintor': serializer.data,
+        })
     
     # --- NUEVO: Endpoint para ver mis extintores registrados ---
     @action(detail=False, methods=['get'], url_path='mis-registros')
