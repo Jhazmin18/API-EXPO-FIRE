@@ -9,6 +9,7 @@ import os
 import uuid
 import segno
 from io import BytesIO
+from urllib.parse import urlencode
 from django.db import models
 from django.conf import settings
 from django.core.files import File
@@ -65,7 +66,6 @@ class Extintor(models.Model):
     
     codigo = models.CharField(
         max_length=50,
-        unique=True,
         verbose_name='Código',
         help_text='Código único del extintor (ej: EXT-001)'
     )
@@ -191,8 +191,15 @@ class Extintor(models.Model):
         verbose_name = 'Extintor'
         verbose_name_plural = 'Extintores'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'codigo'],
+                name='unique_extintor_codigo_por_empresa',
+            ),
+        ]
         indexes = [
             models.Index(fields=['codigo']),
+            models.Index(fields=['empresa', 'codigo']),
             models.Index(fields=['ubicacion']),
             models.Index(fields=['fecha_vencimiento']),
         ]
@@ -262,7 +269,11 @@ class Extintor(models.Model):
         return self.estado.upper()
 
     def get_qr_url(self):
-        return f"{self.QR_BASE_URL}{self.codigo}"
+        base_url = self.QR_BASE_URL.rstrip('/')
+        params = {'codigo': self.codigo}
+        if self.empresa_id:
+            params['empresa_id'] = self.empresa_id
+        return f"{base_url}?{urlencode(params)}"
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).

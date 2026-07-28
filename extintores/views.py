@@ -5,13 +5,12 @@ Vistas de la API REST para extintores.
 Este módulo define los ViewSets que manejan las peticiones HTTP
 para la gestión de extintores.
 """
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.shortcuts import get_object_or_404
+from django.http import Http404, HttpResponse
 from django.db.models import Q
-from django.http import HttpResponse
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 from .models import Extintor
@@ -126,7 +125,29 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             serializer.save(creado_por=self.request.user, empresa=perfil.empresa)
             return
 
-        serializer.save(creado_por=self.request.user)
+        empresa = None
+        empresa_id = self.request.data.get('empresa_id')
+        if empresa_id not in (None, ''):
+            empresa = Empresa.objects.filter(id=empresa_id).first()
+            if not empresa:
+                raise serializers.ValidationError({
+                    'empresa_id': 'Empresa no encontrada.'
+                })
+
+        serializer.save(creado_por=self.request.user, empresa=empresa)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+
+        extintor = serializer.instance
+        response_serializer = ExtintorSerializer(
+            extintor,
+            context=self.get_serializer_context(),
+        )
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @action(detail=False, methods=['get'], url_path='por-codigo/(?P<codigo>[^/.]+)')
     def por_codigo(self, request, codigo=None):
@@ -141,7 +162,28 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         Returns:
             JSON con la información del extintor
         """
-        extintor = get_object_or_404(Extintor, codigo=codigo)
+        empresa_id = request.query_params.get('empresa_id')
+        queryset = Extintor.objects.filter(codigo=codigo)
+
+        if empresa_id:
+            queryset = queryset.filter(empresa_id=empresa_id)
+
+        count = queryset.count()
+        if count == 0:
+            raise Http404
+
+        if count > 1 and not empresa_id:
+            return Response(
+                {
+                    'detail': (
+                        'El código existe en más de una empresa. '
+                        'Debes enviar empresa_id para identificar el extintor.'
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        extintor = queryset.first()
         serializer = self.get_serializer(extintor)
         return Response(serializer.data)
     
