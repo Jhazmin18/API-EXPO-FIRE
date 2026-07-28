@@ -273,7 +273,12 @@ class Extintor(models.Model):
         params = {'codigo': self.codigo}
         if self.empresa_id:
             params['empresa_id'] = self.empresa_id
-        return f"{base_url}?{urlencode(params)}"
+        final_url = f"{base_url}?{urlencode(params)}"
+        print(
+            f"[QR DEBUG] codigo={self.codigo} empresa_id={self.empresa_id} "
+            f"base_url={self.QR_BASE_URL} final_url={final_url}"
+        )
+        return final_url
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
