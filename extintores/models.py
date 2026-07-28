@@ -273,12 +273,7 @@ class Extintor(models.Model):
         params = {'codigo': self.codigo}
         if self.empresa_id:
             params['empresa_id'] = self.empresa_id
-        final_url = f"{base_url}?{urlencode(params)}"
-        print(
-            f"[QR DEBUG] codigo={self.codigo} empresa_id={self.empresa_id} "
-            f"base_url={self.QR_BASE_URL} final_url={final_url}"
-        )
-        return final_url
+        return f"{base_url}?{urlencode(params)}"
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
@@ -392,6 +387,15 @@ class Extintor(models.Model):
         filename = f'qr_{self.codigo}.png'
         self.qr_code.save(filename, File(buffer), save=False)
         buffer.close()
+
+    def regenerar_qr(self):
+        """
+        Fuerza la regeneración del QR usando la URL actual.
+        """
+        if self.qr_code:
+            self.qr_code.delete(save=False)
+            self.qr_code = None
+        self.save()
     
     def save(self, *args, **kwargs):
         """
