@@ -12,7 +12,43 @@ from empresas.serializers import EmpresaSerializer
 from usuarios.models import Perfil
 
 
-class ExtintorSerializer(serializers.ModelSerializer):
+class CodigoUnicoPorEmpresaMixin:
+    def _resolve_empresa_for_codigo(self):
+        if getattr(self, 'instance', None) and getattr(self.instance, 'empresa_id', None):
+            return self.instance.empresa
+
+        initial_data = getattr(self, 'initial_data', {}) or {}
+        empresa_id = initial_data.get('empresa_id')
+        if empresa_id not in (None, ''):
+            return Empresa.objects.filter(id=empresa_id).first()
+
+        request = self.context.get('request')
+        perfil = getattr(getattr(request, 'user', None), 'perfil', None) if request else None
+        if perfil and perfil.empresa_id:
+            return perfil.empresa
+
+        return None
+
+    def validate_codigo(self, value):
+        empresa = self._resolve_empresa_for_codigo()
+        queryset = Extintor.objects.filter(codigo=value)
+
+        if empresa is None:
+            queryset = queryset.filter(empresa__isnull=True)
+        else:
+            queryset = queryset.filter(empresa=empresa)
+
+        if getattr(self, 'instance', None):
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "Ya existe un extintor con este código en la empresa seleccionada."
+            )
+        return value
+
+
+class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer):
     """
     Serializador para el modelo Extintor.
     
@@ -26,7 +62,7 @@ class ExtintorSerializer(serializers.ModelSerializer):
     dias_para_revision = serializers.ReadOnlyField()
     
     empresa = serializers.SerializerMethodField()
-    empresa_id = serializers.UUIDField(write_only=True, required=False)
+    empresa_id = serializers.IntegerField(source='empresa.id', read_only=True)
     qr_code_url = serializers.SerializerMethodField()
     
     # --- NUEVOS: Información del creador ---
@@ -117,6 +153,7 @@ class ExtintorListSerializer(serializers.ModelSerializer):
     
     estado = serializers.ReadOnlyField()
     empresa = serializers.SerializerMethodField()
+    empresa_id = serializers.IntegerField(source='empresa.id', read_only=True)
     
     # --- NUEVO: Nombre del creador para listados ---
     creado_por_nombre = serializers.SerializerMethodField()
@@ -135,6 +172,7 @@ class ExtintorListSerializer(serializers.ModelSerializer):
             'proxima_revision',
             'estado',
             'empresa',
+            'empresa_id',
             'arena',
             'fecha_prueba_hidrostatica',
             # --- NUEVO ---
@@ -157,12 +195,14 @@ class ExtintorListSerializer(serializers.ModelSerializer):
         return None
 
 
-class ExtintorCreateSerializer(serializers.ModelSerializer):
+class ExtintorCreateSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer):
     """
     Serializador para la creación de extintores.
     
     No requiere el campo QR code ya que se genera automáticamente.
     """
+
+    empresa_id = serializers.IntegerField(required=False, write_only=True)
     
     class Meta:
         model = Extintor
@@ -185,14 +225,6 @@ class ExtintorCreateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id']
     
-    def validate_codigo(self, value):
-        """
-        Valida que el código sea único.
-        """
-        if Extintor.objects.filter(codigo=value).exists():
-            raise serializers.ValidationError("Ya existe un extintor con este código.")
-        return value
-
     def create(self, validated_data):
         empresa = validated_data.pop('empresa', None)
         empresa_id = validated_data.pop('empresa_id', None)
