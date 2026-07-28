@@ -44,6 +44,10 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'webmaster@localhost')
+FRONTEND_QR_BASE = os.getenv(
+    'FRONTEND_QR_BASE',
+    'https://www.exprofire.com/qr/',
+)
 PASSWORD_RESET_FRONTEND_URL = os.getenv(
     'PASSWORD_RESET_FRONTEND_URL',
     'https://www.exprofire.com/olvide-password',
