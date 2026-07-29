@@ -2,7 +2,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.contrib.auth import get_user_model
 
@@ -35,6 +36,23 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     
     queryset = Empresa.objects.all()
     serializer_class = EmpresaSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        if not user.is_authenticated:
+            return queryset.none()
+
+        perfil = getattr(user, 'perfil', None)
+        if user.is_superuser or (perfil and perfil.rol == Perfil.ROLE_SUPERADMIN):
+            return queryset
+
+        empresa_id = getattr(perfil, 'empresa_id', None)
+        if empresa_id:
+            return queryset.filter(id=empresa_id)
+
+        return queryset.none()
     @action(detail=False, methods=['get'], url_path='resumen')
     def resumen(self, request):
         """
@@ -46,15 +64,17 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         - Empresas inactivas
         - (Opcional para admins) Registros por técnico
         """
-        # Filtros opcionales
+        queryset = self.get_queryset()
+        perfil = getattr(request.user, 'perfil', None)
+
+        # Los filtros por querystring solo se permiten dentro del universo
+        # que el usuario ya tiene autorizado a ver.
         tecnico_id = request.query_params.get('tecnico_id')
         creado_por_id = request.query_params.get('creado_por_id')
-        
-        queryset = Empresa.objects.all()
-        
+
         if tecnico_id:
             queryset = queryset.filter(creado_por_id=tecnico_id)
-        
+
         if creado_por_id:
             queryset = queryset.filter(creado_por_id=creado_por_id)
         
@@ -69,26 +89,24 @@ class EmpresaViewSet(viewsets.ModelViewSet):
             'inactivas': inactivas,
         }
         
-        # Si es superadmin, agregar resumen por técnico
-        if request.user.is_authenticated:
-            perfil = getattr(request.user, 'perfil', None)
-            if perfil and perfil.rol == Perfil.ROLE_SUPERADMIN:
-                registros_por_tecnico = []
-                
-                for user in User.objects.filter(empresas_creadas__isnull=False).distinct():
-                    count = user.empresas_creadas.count()
-                    perfil_user = getattr(user, 'perfil', None)
-                    
-                    registros_por_tecnico.append({
-                        'tecnico_id': user.id,
-                        'nombre': perfil_user.nombre_completo if perfil_user else user.username,
-                        'email': user.email,
-                        'total_registros': count,
-                        'activas': user.empresas_creadas.filter(activa=True).count(),
-                        'inactivas': user.empresas_creadas.filter(activa=False).count(),
-                    })
-                
-                data['registros_por_tecnico'] = registros_por_tecnico
+        # Solo el superadmin ve el desglose global por técnico.
+        if perfil and perfil.rol == Perfil.ROLE_SUPERADMIN:
+            registros_por_tecnico = []
+
+            for user in User.objects.filter(empresas_creadas__isnull=False).distinct():
+                count = user.empresas_creadas.count()
+                perfil_user = getattr(user, 'perfil', None)
+
+                registros_por_tecnico.append({
+                    'tecnico_id': user.id,
+                    'nombre': perfil_user.nombre_completo if perfil_user else user.username,
+                    'email': user.email,
+                    'total_registros': count,
+                    'activas': user.empresas_creadas.filter(activa=True).count(),
+                    'inactivas': user.empresas_creadas.filter(activa=False).count(),
+                })
+
+            data['registros_por_tecnico'] = registros_por_tecnico
         
         serializer = EmpresaResumenSerializer(data)
         return Response(serializer.data)
@@ -102,12 +120,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Define permisos según la acción"""
-        if self.action in ['list', 'retrieve', 'resumen']:
-            # Lectura pública
-            permission_classes = [AllowAny]
-        else:
-            # Escritura requiere autenticación
-            permission_classes = [IsAuthenticated]
+        permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
@@ -131,7 +144,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
-        empresas = self.queryset.filter(creado_por=request.user)
+        empresas = self.get_queryset().filter(creado_por=request.user)
         serializer = self.get_serializer(empresas, many=True)
         
         return Response({
@@ -174,22 +187,46 @@ class ContactoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         empresa_id = self.kwargs.get('empresa_pk') or self.request.data.get('empresa_id')
-        if empresa_id:
+        user = self.request.user
+        perfil = getattr(user, 'perfil', None)
+
+        if user.is_superuser or (perfil and perfil.rol == Perfil.ROLE_SUPERADMIN):
+            if not empresa_id:
+                raise PermissionDenied('Debes indicar la empresa para crear el contacto.')
+
             empresa = Empresa.objects.get(id=empresa_id)
             serializer.save(empresa=empresa)
             return
-        serializer.save()
+
+        empresa_permitida_id = getattr(perfil, 'empresa_id', None)
+        if not empresa_permitida_id:
+            raise PermissionDenied('Tu usuario no tiene una empresa asociada.')
+
+        if empresa_id and str(empresa_id) != str(empresa_permitida_id):
+            raise PermissionDenied('No puedes crear contactos para otra empresa.')
+
+        empresa = Empresa.objects.get(id=empresa_permitida_id)
+        serializer.save(empresa=empresa)
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]
-        else:
-            permission_classes = [IsAuthenticated]
+        permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
         """Filtra contactos por empresa si se proporciona el parámetro"""
         queryset = super().get_queryset()
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset.none()
+
+        perfil = getattr(user, 'perfil', None)
+        if not (user.is_superuser or (perfil and perfil.rol == Perfil.ROLE_SUPERADMIN)):
+            empresa_id_permitida = getattr(perfil, 'empresa_id', None)
+            if empresa_id_permitida:
+                queryset = queryset.filter(empresa_id=empresa_id_permitida)
+            else:
+                return queryset.none()
+
         empresa_id = (
             self.kwargs.get('empresa_pk')
             or self.request.query_params.get('empresa_id')
