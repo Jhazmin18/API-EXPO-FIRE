@@ -272,9 +272,12 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         archivo_zip = BytesIO()
         with ZipFile(archivo_zip, 'w', ZIP_DEFLATED) as zipfile:
             for extintor in queryset:
-                etiqueta = extintor.obtener_etiqueta_png()
-                nombre_archivo = f"{extintor.codigo}.png"
-                zipfile.writestr(nombre_archivo, etiqueta.getvalue())
+                if not extintor.qr_code:
+                    extintor.save()
+
+                with extintor.qr_code.open('rb') as qr_file:
+                    nombre_archivo = f"{extintor.codigo}.png"
+                    zipfile.writestr(nombre_archivo, qr_file.read())
         archivo_zip.seek(0)
 
         response = HttpResponse(archivo_zip.getvalue(), content_type='application/zip')
@@ -284,11 +287,15 @@ class ExtintorViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='etiqueta')
     def etiqueta(self, request, pk=None):
         """
-        Devuelve la etiqueta QR (PNG) lista para imprimir.
+        Devuelve la URL firmada de la etiqueta QR almacenada en S3.
         """
         extintor = self.get_object()
-        buffer = extintor.obtener_etiqueta_png()
-        return HttpResponse(buffer.getvalue(), content_type='image/png')
+        if not extintor.qr_code:
+            extintor.save()
+
+        return Response({
+            'etiqueta_url': extintor.qr_code.url,
+        })
 
     @action(detail=True, methods=['post'], url_path='regenerar-qr')
     def regenerar_qr(self, request, pk=None):

@@ -12,13 +12,24 @@ from io import BytesIO
 from urllib.parse import urlencode
 from django.db import models
 from django.conf import settings
-from django.core.files import File
+from django.core.files.base import ContentFile
 from django.utils.functional import cached_property
 from django.utils import timezone
 from datetime import timedelta
 from PIL import Image, ImageDraw, ImageFont
 
 from empresas.models import Empresa
+
+
+def qr_code_upload_to(instance, _filename):
+    """
+    Organiza el QR por empresa y usa un nombre único por archivo para evitar
+    colisiones y problemas de caché al regenerar la imagen.
+    """
+    empresa_id = getattr(instance, 'empresa_id', None)
+    empresa_folder = f'empresa_{empresa_id}' if empresa_id else 'empresa_sin_asignar'
+    unique_id = uuid.uuid4().hex
+    return f'empresas/{empresa_folder}/qr_codes/qr_{unique_id}.png'
 
 
 class Extintor(models.Model):
@@ -152,7 +163,7 @@ class Extintor(models.Model):
     )
 
     qr_code = models.ImageField(
-        upload_to='qr_codes/',
+        upload_to=qr_code_upload_to,
         blank=True,
         null=True,
         verbose_name='Código QR'
@@ -384,8 +395,8 @@ class Extintor(models.Model):
         buffer.seek(0)
         
         # Guardar en el modelo
-        filename = f'qr_{self.codigo}.png'
-        self.qr_code.save(filename, File(buffer), save=False)
+        filename = f'qr_{self.id.hex}.png'
+        self.qr_code.save(filename, ContentFile(buffer.getvalue()), save=False)
         buffer.close()
 
     def regenerar_qr(self):
