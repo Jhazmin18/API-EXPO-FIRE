@@ -4,7 +4,6 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -13,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Lead
 from .serializers import LeadCreateSerializer, LeadSerializer
+from core.brevo import send_brevo_transactional_email
 
 
 TURNSTILE_SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
@@ -108,29 +108,20 @@ class LeadCreateView(APIView):
             lead.save(update_fields=['email_error'])
             return
 
-        # Si por alguna razón LEADS_TO_EMAIL viene como texto plano en lugar de lista, lo convierte
         if isinstance(recipients, str):
-            recipients = [email.strip() for email in recipients.split(',')]
+            recipients = [email.strip() for email in recipients.split(',') if email.strip()]
 
-        try:
-            # Enviamos el correo con fail_silently=True
-            sent = send_mail(
-                f'Nuevo lead: {lead.nombre} - {lead.empresa}',
-                f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}',
-                settings.DEFAULT_FROM_EMAIL,
-                recipients,
-                fail_silently=True,  # <-- ESTO EVITA EL TIMEOUT DE 30 SEGUNDOS
-            )
-            
-            # Si sent es mayor a 0, el correo se envió con éxito. Si es 0, falló en silencio.
-            lead.email_enviado = sent > 0
-            lead.email_enviado_at = timezone.now() if lead.email_enviado else None
-            lead.email_error = '' if lead.email_enviado else 'Timeout o rechazo silencioso del servidor SMTP (Gmail).'
-            
-        except Exception as exc:
-            # Esto solo atrapará errores raros del código, no caídas de conexión
-            lead.email_enviado = False
-            lead.email_error = str(exc)[:2000]
+        result = send_brevo_transactional_email(
+            to_emails=recipients,
+            subject=f'Nuevo lead: {lead.nombre} - {lead.empresa}',
+            text_content=(
+                f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; '
+                f'Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}'
+            ),
+        )
 
-        # Guarda los resultados en la base de datos para que puedas auditarlos
+        lead.email_enviado = bool(result['ok'])
+        lead.email_enviado_at = timezone.now() if lead.email_enviado else None
+        lead.email_error = '' if lead.email_enviado else (result['error'] or 'Error enviando correo con Brevo API.')
+
         lead.save(update_fields=['email_enviado', 'email_enviado_at', 'email_error'])
