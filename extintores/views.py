@@ -309,6 +309,21 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             'detail': 'QR regenerado correctamente.',
             'extintor': serializer.data,
         })
+
+    @action(detail=True, methods=['get'], url_path='qr-descargar')
+    def qr_descargar(self, request, pk=None):
+        """
+        Descarga directa del PNG del QR/etiqueta del extintor.
+        Útil para evitar problemas de CORS con el bucket privado de S3.
+        """
+        extintor = self.get_object()
+        if not extintor.qr_code:
+            extintor.save()
+
+        with extintor.qr_code.open('rb') as qr_file:
+            response = HttpResponse(qr_file.read(), content_type='image/png')
+            response['Content-Disposition'] = f'attachment; filename="qr_{extintor.codigo}.png"'
+            return response
     
     # --- NUEVO: Endpoint para ver mis extintores registrados ---
     @action(detail=False, methods=['get'], url_path='mis-registros')
