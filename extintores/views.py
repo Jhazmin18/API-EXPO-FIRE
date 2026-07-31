@@ -19,6 +19,7 @@ from usuarios.models import Perfil
 from .serializers import (
     ExtintorSerializer,
     ExtintorListSerializer,
+    ExtintorPublicSerializer,
     ExtintorCreateSerializer,
 )
 
@@ -52,11 +53,13 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             return ExtintorListSerializer
         elif self.action == 'create':
             return ExtintorCreateSerializer
+        elif self.action == 'informacion_publica':
+            return ExtintorPublicSerializer
         return ExtintorSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if self.action != 'por_codigo':
+        if self.action not in ['por_codigo', 'informacion_publica']:
             queryset = self._filter_queryset_by_user_company(queryset)
 
         empresa = self.request.query_params.get('empresa')
@@ -101,7 +104,7 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         - por_codigo: Público (para QR scanner)
         - Resto: Requiere autenticación
         """
-        if self.action == 'por_codigo':
+        if self.action in ['por_codigo', 'informacion_publica']:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
@@ -184,6 +187,17 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             )
 
         extintor = queryset.first()
+        serializer = self.get_serializer(extintor)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='informacion')
+    def informacion_publica(self, request, pk=None):
+        """
+        Endpoint público para la página /informacion/{id}.
+        
+        Devuelve solo datos seguros del extintor para consulta externa.
+        """
+        extintor = self.get_object()
         serializer = self.get_serializer(extintor)
         return Response(serializer.data)
     

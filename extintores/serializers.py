@@ -195,6 +195,53 @@ class ExtintorListSerializer(serializers.ModelSerializer):
         return None
 
 
+class ExtintorPublicSerializer(serializers.ModelSerializer):
+    """
+    Serializador público para la vista accesible desde el QR.
+    
+    Expone solo datos seguros para visualización externa.
+    """
+
+    estado = serializers.ReadOnlyField()
+    empresa_nombre = serializers.SerializerMethodField()
+    qr_code_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Extintor
+        fields = [
+            'id',
+            'codigo',
+            'ubicacion',
+            'tipo',
+            'modalidad',
+            'clase_fuego',
+            'capacidad',
+            'fecha_fabricacion',
+            'fecha_vencimiento',
+            'ultima_revision',
+            'proxima_revision',
+            'observaciones',
+            'arena',
+            'fecha_prueba_hidrostatica',
+            'estado',
+            'empresa_nombre',
+            'qr_code_url',
+        ]
+
+    def get_empresa_nombre(self, obj):
+        if obj.empresa:
+            return obj.empresa.nombre
+        return None
+
+    def get_qr_code_url(self, obj):
+        if obj.qr_code:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.qr_code.url)
+            return obj.qr_code.url
+        return None
+
+
 class ExtintorCreateSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer):
     """
     Serializador para la creación de extintores.
