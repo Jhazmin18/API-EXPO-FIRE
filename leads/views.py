@@ -4,6 +4,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -12,7 +13,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Lead
 from .serializers import LeadCreateSerializer, LeadSerializer
-from core.brevo import send_brevo_transactional_email
 
 
 TURNSTILE_SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
@@ -111,17 +111,23 @@ class LeadCreateView(APIView):
         if isinstance(recipients, str):
             recipients = [email.strip() for email in recipients.split(',') if email.strip()]
 
-        result = send_brevo_transactional_email(
-            to_emails=recipients,
-            subject=f'Nuevo lead: {lead.nombre} - {lead.empresa}',
-            text_content=(
-                f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; '
-                f'Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}'
-            ),
-        )
-
-        lead.email_enviado = bool(result['ok'])
-        lead.email_enviado_at = timezone.now() if lead.email_enviado else None
-        lead.email_error = '' if lead.email_enviado else (result['error'] or 'Error enviando correo con Brevo API.')
+        try:
+            send_mail(
+                subject=f'Nuevo lead: {lead.nombre} - {lead.empresa}',
+                message=(
+                    f'Nombre: {lead.nombre}; Empresa: {lead.empresa}; Correo: {lead.correo}; '
+                    f'Telefono: {lead.telefono}; Servicio: {lead.servicio}; Mensaje: {lead.mensaje}'
+                ),
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                recipient_list=recipients,
+                fail_silently=False,
+            )
+            lead.email_enviado = True
+            lead.email_enviado_at = timezone.now()
+            lead.email_error = ''
+        except Exception as exc:
+            lead.email_enviado = False
+            lead.email_enviado_at = None
+            lead.email_error = str(exc) or 'Error enviando correo con SMTP.'
 
         lead.save(update_fields=['email_enviado', 'email_enviado_at', 'email_error'])

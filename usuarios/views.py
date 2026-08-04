@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -29,8 +30,6 @@ from .serializers import (
     SolicitarOlvidePasswordSerializer,
     SolicitarResetPasswordSerializer,
 )
-from core.brevo import send_brevo_transactional_email
-
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -99,25 +98,28 @@ class SolicitarOlvidePasswordView(APIView):
 
         if user:
             reset_link = _build_password_reset_link(user)
-            result = send_brevo_transactional_email(
-                to_email=user.email,
-                subject='Restablece tu contrasena',
-                text_content=(
-                    'Hemos recibido una solicitud para restablecer tu contrasena.\n\n'
-                    f'Abre este enlace para continuar:\n{reset_link}\n\n'
-                    'Si no solicitaste este cambio, puedes ignorar este correo.'
-                ),
-            )
-            if not result['ok']:
+            try:
+                send_mail(
+                    subject='Restablece tu contrasena',
+                    message=(
+                        'Hemos recibido una solicitud para restablecer tu contrasena.\n\n'
+                        f'Abre este enlace para continuar:\n{reset_link}\n\n'
+                        'Si no solicitaste este cambio, puedes ignorar este correo.'
+                    ),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception as exc:
                 logger.exception(
                     'Error enviando correo de restablecimiento: %s',
-                    result['error'],
+                    exc,
                 )
                 return Response(
                     {
                         'detail': (
                             'Encontramos el usuario, pero no fue posible enviar el correo. '
-                            'Revisa la configuracion de Brevo.'
+                            'Revisa la configuracion SMTP.'
                         )
                     },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
