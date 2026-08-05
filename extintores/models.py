@@ -285,10 +285,11 @@ class Extintor(models.Model):
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
-        label_width = 620
-        label_height = 224
-        margin = 12
-        gap = 14
+        scale = 1.3
+        label_width = int(620 * scale)
+        label_height = int(224 * scale)
+        margin = int(12 * scale)
+        gap = int(14 * scale)
 
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
@@ -308,9 +309,9 @@ class Extintor(models.Model):
 
         draw = ImageDraw.Draw(combined)
         try:
-            title_font = ImageFont.truetype('arialbd.ttf', 28)
-            text_font = ImageFont.truetype('arial.ttf', 20)
-            small_font = ImageFont.truetype('arial.ttf', 18)
+            title_font = ImageFont.truetype('arialbd.ttf', int(28 * scale))
+            text_font = ImageFont.truetype('arial.ttf', int(20 * scale))
+            small_font = ImageFont.truetype('arial.ttf', int(18 * scale))
         except OSError:
             title_font = ImageFont.load_default()
             text_font = ImageFont.load_default()
@@ -318,7 +319,7 @@ class Extintor(models.Model):
 
         text_x = margin + qr_size + gap
         text_width = label_width - text_x - margin
-        y = margin + 6
+        y = margin + int(6 * scale)
 
         def truncate_text(text, font, max_width):
             text = str(text or '')
@@ -336,7 +337,7 @@ class Extintor(models.Model):
             font=title_font,
         )
 
-        y += 42
+        y += int(42 * scale)
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
@@ -344,7 +345,7 @@ class Extintor(models.Model):
             font=text_font,
         )
 
-        y += 32
+        y += int(32 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
@@ -352,7 +353,7 @@ class Extintor(models.Model):
             font=small_font,
         )
 
-        y += 30
+        y += int(30 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
@@ -361,7 +362,7 @@ class Extintor(models.Model):
         )
 
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        y += 30
+        y += int(30 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
