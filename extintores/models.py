@@ -289,7 +289,8 @@ class Extintor(models.Model):
         label_width = int(620 * scale)
         label_height = int(224 * scale)
         margin = int(12 * scale)
-        gap = int(14 * scale)
+        gap = int(18 * scale)
+        qr_padding = int(6 * scale)
 
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
@@ -297,7 +298,8 @@ class Extintor(models.Model):
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
-        qr_size = label_height - (margin * 2)
+        # Hacemos el QR más compacto para darle aire al bloque de texto.
+        qr_size = int(label_height * 0.72)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
@@ -305,21 +307,22 @@ class Extintor(models.Model):
         qr_img = qr_img.resize((qr_size, qr_size), resample_filter)
 
         combined = Image.new('RGB', (label_width, label_height), 'white')
-        combined.paste(qr_img, (margin, margin))
+        qr_y = max(margin, (label_height - qr_size) // 2)
+        combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
         try:
-            title_font = ImageFont.truetype('arialbd.ttf', int(28 * scale))
-            text_font = ImageFont.truetype('arial.ttf', int(20 * scale))
-            small_font = ImageFont.truetype('arial.ttf', int(18 * scale))
+            title_font = ImageFont.truetype('arialbd.ttf', int(32 * scale))
+            text_font = ImageFont.truetype('arial.ttf', int(23 * scale))
+            small_font = ImageFont.truetype('arial.ttf', int(20 * scale))
         except OSError:
             title_font = ImageFont.load_default()
             text_font = ImageFont.load_default()
             small_font = ImageFont.load_default()
 
-        text_x = margin + qr_size + gap
+        text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
-        y = margin + int(6 * scale)
+        y = margin + int(4 * scale)
 
         def truncate_text(text, font, max_width):
             text = str(text or '')
@@ -337,7 +340,7 @@ class Extintor(models.Model):
             font=title_font,
         )
 
-        y += int(42 * scale)
+        y += int(40 * scale)
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
@@ -345,7 +348,7 @@ class Extintor(models.Model):
             font=text_font,
         )
 
-        y += int(32 * scale)
+        y += int(30 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
@@ -353,7 +356,7 @@ class Extintor(models.Model):
             font=small_font,
         )
 
-        y += int(30 * scale)
+        y += int(28 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
@@ -362,7 +365,7 @@ class Extintor(models.Model):
         )
 
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        y += int(30 * scale)
+        y += int(28 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
