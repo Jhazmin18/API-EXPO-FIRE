@@ -38,17 +38,22 @@ def _load_font(size, bold=False):
     Carga una fuente disponible tanto en Windows como en Linux/Railway.
     """
     candidates = [
+        'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf',
+        'LiberationSans-Bold.ttf' if bold else 'LiberationSans-Regular.ttf',
         'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
     ]
     for font_path in candidates:
-        if font_path and os.path.exists(font_path):
-            try:
-                return ImageFont.truetype(font_path, size)
-            except OSError:
+        if not font_path:
+            continue
+        try:
+            if os.path.isabs(font_path) and not os.path.exists(font_path):
                 continue
+            return ImageFont.truetype(font_path, size)
+        except OSError:
+            continue
     return ImageFont.load_default()
 
 
@@ -305,7 +310,7 @@ class Extintor(models.Model):
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
-        scale = 2.0
+        scale = 2.2
         label_width = int(620 * scale)
         label_height = int(224 * scale)
         margin = int(12 * scale)
@@ -331,9 +336,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(int(40 * scale), bold=True)
-        text_font = _load_font(int(30 * scale), bold=False)
-        small_font = _load_font(int(27 * scale), bold=False)
+        title_font = _load_font(int(44 * scale), bold=True)
+        text_font = _load_font(int(34 * scale), bold=False)
+        small_font = _load_font(int(30 * scale), bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
