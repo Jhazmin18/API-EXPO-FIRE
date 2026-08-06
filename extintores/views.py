@@ -61,6 +61,8 @@ class ExtintorViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.action not in ['por_codigo', 'informacion_publica']:
+            if self.action == 'revisiones' and self.request.method == 'POST':
+                return queryset
             queryset = self._filter_queryset_by_user_company(queryset)
 
         empresa = self.request.query_params.get('empresa')
@@ -216,7 +218,9 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         GET /extintores/{id}/revisiones/ -> lista el historial de revisiones.
         POST /extintores/{id}/revisiones/ -> crea una nueva revisión.
         """
-        extintor = self.get_object()
+        extintor = Extintor.objects.filter(pk=pk).select_related('empresa', 'creado_por').first()
+        if not extintor:
+            raise Http404
 
         if request.method == 'GET':
             revisiones = extintor.revisiones.select_related('tecnico', 'empresa').all()
