@@ -236,6 +236,7 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         revision = serializer.save()
+        extintor.registrar_revision(revision.creado_en.date(), meses_siguiente=1)
         read_serializer = RevisionExtintorSerializer(revision)
         return Response(read_serializer.data, status=status.HTTP_201_CREATED)
 
