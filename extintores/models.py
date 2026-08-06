@@ -311,20 +311,20 @@ class Extintor(models.Model):
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
         scale = 1.0
-        label_width = 760
-        label_height = 360
-        margin = 18
-        gap = 12
+        label_width = 620
+        label_height = 224
+        margin = 12
+        gap = 10
         qr_padding = 4
 
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
-        qr.save(qr_buffer, kind='png', scale=14, border=4, dark='#000000', light='white')
+        qr.save(qr_buffer, kind='png', scale=8, border=4, dark='#000000', light='white')
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
         # Hacemos el QR un poco más compacto para darle más protagonismo al texto.
-        qr_size = int(label_height * 0.75)
+        qr_size = int(label_height * 0.58)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
@@ -336,9 +336,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(112, bold=True)
-        text_font = _load_font(84, bold=False)
-        small_font = _load_font(64, bold=False)
+        title_font = _load_font(150, bold=True)
+        text_font = _load_font(100, bold=False)
+        small_font = _load_font(90, bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
