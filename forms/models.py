@@ -159,12 +159,14 @@ class FormRun(models.Model):
     TIPO_RECARGA = 'recarga'
     TIPO_VENTA = 'venta'
     TIPO_INSPECCION = 'inspeccion'
+    TIPO_UIPC = 'uipc'
     TIPO_SERVICIO_CHOICES = [
         (TIPO_LEVANTAMIENTO, 'Levantamiento'),
         (TIPO_MANTENIMIENTO, 'Mantenimiento'),
         (TIPO_RECARGA, 'Recarga'),
         (TIPO_VENTA, 'Venta'),
         (TIPO_INSPECCION, 'Inspección'),
+        (TIPO_UIPC, 'UIPC'),
     ]
 
     template = models.ForeignKey(

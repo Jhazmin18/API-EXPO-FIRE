@@ -117,8 +117,8 @@ class FormRunRevisionSerializer(serializers.ModelSerializer):
 
 class FormRunSerializer(serializers.ModelSerializer):
     tecnico = serializers.PrimaryKeyRelatedField(read_only=True)
-    template = serializers.PrimaryKeyRelatedField(queryset=FormTemplate.objects.all())
-    empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all())
+    template = serializers.PrimaryKeyRelatedField(queryset=FormTemplate.objects.all(), required=False, allow_null=True)
+    empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all(), required=False, allow_null=True)
     respuestas_json = serializers.JSONField()
     observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     observaciones_por_item = serializers.JSONField(required=False, allow_null=True)
@@ -147,13 +147,25 @@ class FormRunSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        scope_type = attrs.get('scope_type') or getattr(self.instance, 'scope_type', None)
+        scope_id = attrs.get('scope_id') or getattr(self.instance, 'scope_id', None)
+        tipo_servicio = attrs.get('tipo_servicio') or getattr(self.instance, 'tipo_servicio', None)
+
         template = attrs.get('template') or getattr(self.instance, 'template', None)
+        if not template:
+            template = self._resolver_template_por_contexto(tipo_servicio, scope_type)
+            if template:
+                attrs['template'] = template
         if not template:
             raise serializers.ValidationError(
                 {'template': 'La plantilla es obligatoria.'}
             )
-        request = self.context.get('request')
         empresa_obj = attrs.get('empresa') or getattr(self.instance, 'empresa', None)
+        if not empresa_obj:
+            empresa_obj = self._resolver_empresa_por_contexto(scope_type, scope_id)
+            if empresa_obj:
+                attrs['empresa'] = empresa_obj
+        request = self.context.get('request')
         empresa_id = empresa_obj.id if empresa_obj else None
         user = getattr(request, 'user', None) if request else None
         if request and user and user.is_authenticated:
@@ -166,10 +178,15 @@ class FormRunSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'template': 'No tienes permisos para usar esta plantilla.'}
                 )
-            if template.roles_permitidos or template.empresas_permitidas.exists():
+            if template.roles_permitidos:
                 raise serializers.ValidationError(
                     {'template': 'No tienes permisos para usar esta plantilla.'}
                 )
+            if template.empresas_permitidas.exists():
+                if not empresa_id or not template.empresas_permitidas.filter(id=empresa_id).exists():
+                    raise serializers.ValidationError(
+                        {'template': 'No tienes permisos para usar esta plantilla.'}
+                    )
 
         respuestas = attrs.get('respuestas_json')
         if respuestas is None:
@@ -179,9 +196,6 @@ class FormRunSerializer(serializers.ModelSerializer):
                 {'respuestas_json': 'El campo respuestas_json debe ser un objeto.'}
             )
 
-        scope_type = attrs.get('scope_type') or getattr(self.instance, 'scope_type', None)
-        scope_id = attrs.get('scope_id') or getattr(self.instance, 'scope_id', None)
-        tipo_servicio = attrs.get('tipo_servicio') or getattr(self.instance, 'tipo_servicio', None)
         extintor = self._obtener_extintor(scope_type, scope_id)
 
         agente_extintor = self._resolver_agente(respuestas, extintor)
@@ -295,6 +309,24 @@ class FormRunSerializer(serializers.ModelSerializer):
             return Extintor.objects.get(pk=scope_id)
         except Extintor.DoesNotExist:
             return None
+
+    def _resolver_empresa_por_contexto(self, scope_type, scope_id):
+        extintor = self._obtener_extintor(scope_type, scope_id)
+        if extintor and extintor.empresa:
+            return extintor.empresa
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        perfil = getattr(user, 'perfil', None) if user else None
+        if perfil and perfil.empresa_id:
+            return perfil.empresa
+
+        return None
+
+    def _resolver_template_por_contexto(self, tipo_servicio, scope_type):
+        if scope_type == FormRun.SCOPE_EXTINTOR and str(tipo_servicio).lower() == FormRun.TIPO_UIPC:
+            return FormTemplate.objects.filter(codigo='UIPC_SEH', activo=True).order_by('-version').first()
+        return None
 
     def _resolver_agente(self, respuestas, extintor):
         agente = respuestas.get('agente_extintor')
