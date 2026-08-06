@@ -73,6 +73,10 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         creado_por = self.request.query_params.get('creado_por')
         if creado_por:
             queryset = queryset.filter(creado_por_id=creado_por)
+
+        queryset = queryset.filter(
+            Q(empresa__isnull=True) | ~Q(empresa__estatus='BORRADA')
+        )
         
         return queryset
 
@@ -166,7 +170,9 @@ class ExtintorViewSet(viewsets.ModelViewSet):
             JSON con la información del extintor
         """
         empresa_id = request.query_params.get('empresa_id')
-        queryset = Extintor.objects.filter(codigo=codigo)
+        queryset = Extintor.objects.filter(codigo=codigo).filter(
+            Q(empresa__isnull=True) | ~Q(empresa__estatus='BORRADA')
+        )
 
         if empresa_id:
             queryset = queryset.filter(empresa_id=empresa_id)
@@ -354,7 +360,7 @@ class ExtintorViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
-        extintores = self.queryset.filter(creado_por=request.user)
+        extintores = self.get_queryset().filter(creado_por=request.user)
         serializer = self.get_serializer(extintores, many=True)
         
         return Response({

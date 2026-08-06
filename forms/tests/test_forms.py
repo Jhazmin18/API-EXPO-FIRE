@@ -62,6 +62,27 @@ class FormsWorkflowTest(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(FormRun.objects.count(), 1)
 
+    def test_guarda_observaciones_y_claves_extra(self):
+        respuestas = {
+            'ubicacion_correcta': True,
+            'fecha_proxima': True,
+        }
+        payload = self._payload(
+            scope_id=str(self.extintor_pqs.pk),
+            estado=FormRun.ESTADO_BORRADOR,
+            respuestas=respuestas,
+        )
+        payload['observaciones'] = 'TODO OK'
+        payload['observaciones_por_item'] = {'pasador': 'Falta pasador'}
+
+        response = self.client.post(self.base_url, payload, format='json')
+        self.assertEqual(response.status_code, 201)
+
+        run = FormRun.objects.get(pk=response.data['id'])
+        self.assertEqual(run.observaciones, 'TODO OK')
+        self.assertEqual(run.observaciones_por_item, {'pasador': 'Falta pasador'})
+        self.assertEqual(run.respuestas_json.get('fecha_proxima'), True)
+
     def test_completar_sin_requeridos_retorna_error(self):
         respuestas = {
             'ubicacion_correcta': True,

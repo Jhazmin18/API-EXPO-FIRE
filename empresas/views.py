@@ -32,6 +32,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     - GET /empresas/resumen/ - Ver resumen de empresas (total, activas, inactivas)
     - GET /empresas/mis-registros/ - Ver empresas registradas por el técnico actual
     - POST /empresas/{id}/agregar-contacto/ - Agregar contacto adicional a una empresa
+    - POST /empresas/{id}/borrar/ - Marcar una empresa como borrada sin eliminarla
     """
     
     queryset = Empresa.objects.all()
@@ -167,6 +168,40 @@ class EmpresaViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='borrar')
+    def borrar(self, request, pk=None):
+        """
+        Endpoint: POST /empresas/{id}/borrar/
+
+        Marca la empresa como BORRADA para ocultarla del frontend sin
+        eliminar el registro de la base de datos.
+        """
+        empresa = self.get_object()
+
+        perfil = getattr(request.user, 'perfil', None)
+        if not (
+            request.user.is_superuser
+            or (perfil and perfil.rol == Perfil.ROLE_SUPERADMIN)
+            or (perfil and perfil.empresa_id == empresa.id and perfil.rol == Perfil.ROLE_ADMIN_EMPRESA)
+        ):
+            raise PermissionDenied('No tienes permiso para borrar esta empresa.')
+
+        if empresa.estatus == 'BORRADA':
+            return Response({
+                'detail': 'La empresa ya estaba marcada como borrada.',
+                'empresa_id': str(empresa.id),
+                'estatus': empresa.estatus,
+            })
+
+        empresa.estatus = 'BORRADA'
+        empresa.save(update_fields=['estatus'])
+
+        return Response({
+            'detail': 'Empresa marcada como borrada correctamente.',
+            'empresa_id': str(empresa.id),
+            'estatus': empresa.estatus,
+        }, status=status.HTTP_200_OK)
 
 
 class ContactoViewSet(viewsets.ModelViewSet):

@@ -16,6 +16,16 @@ class Empresa(models.Model):
     razon_social = models.CharField(max_length=200, blank=True, verbose_name='Razón Social')
     logo = models.ImageField(upload_to='logos/', blank=True, null=True, verbose_name='Logo')
     tipo_inmueble = models.CharField(max_length=150, blank=True, verbose_name='Tipo de inmueble')
+    estatus = models.CharField(
+        max_length=20,
+        choices=[
+            ('VIGENTE', 'Vigente'),
+            ('BORRADA', 'Borrada'),
+        ],
+        default='VIGENTE',
+        verbose_name='Estatus',
+        help_text='Control visual para ocultar la empresa en el frontend sin eliminarla.',
+    )
     activa = models.BooleanField(default=True, verbose_name='Activa')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
 

@@ -64,6 +64,8 @@ class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer
     empresa = serializers.SerializerMethodField()
     empresa_id = serializers.IntegerField(source='empresa.id', read_only=True)
     qr_code_url = serializers.SerializerMethodField()
+    revisiones = serializers.SerializerMethodField()
+    revisiones_total = serializers.SerializerMethodField()
     
     # --- NUEVOS: Información del creador ---
     creado_por_nombre = serializers.SerializerMethodField()
@@ -96,6 +98,8 @@ class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer
             'updated_at',
             'empresa',
             'empresa_id',
+            'revisiones',
+            'revisiones_total',
             # --- NUEVOS ---
             'creado_por',
             'creado_por_nombre',
@@ -120,6 +124,28 @@ class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer
             serializer = EmpresaSerializer(obj.empresa)
             return serializer.data
         return None
+
+    def get_revisiones(self, obj):
+        from forms.models import FormRun
+        from forms.serializers import FormRunRevisionSerializer
+
+        revisiones = (
+            FormRun.objects.filter(
+                scope_type=FormRun.SCOPE_EXTINTOR,
+                scope_id=str(obj.id),
+            )
+            .select_related('tecnico', 'template', 'empresa')
+            .order_by('-creado_en')
+        )
+        return FormRunRevisionSerializer(revisiones, many=True).data
+
+    def get_revisiones_total(self, obj):
+        from forms.models import FormRun
+
+        return FormRun.objects.filter(
+            scope_type=FormRun.SCOPE_EXTINTOR,
+            scope_id=str(obj.id),
+        ).count()
     
     # --- NUEVOS MÉTODOS ---
     def get_creado_por_nombre(self, obj):

@@ -56,6 +56,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
             'logo',
             'logo_url',
             'tipo_inmueble',
+            'estatus',
             'activa',
             'created_at',
 
@@ -129,6 +130,7 @@ class EmpresaCreacionSerializer(serializers.ModelSerializer):
             'razon_social',
             'logo',
             'tipo_inmueble',
+            'estatus',
             'activa',
             'creado_por',
             'metros_cuadrados_totales',

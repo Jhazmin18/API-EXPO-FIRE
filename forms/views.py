@@ -1,5 +1,5 @@
 from rest_framework import generics, mixins, status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -79,6 +79,11 @@ class FormRunViewSet(
     )
     serializer_class = FormRunSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [permission() for permission in self.permission_classes]
 
     def get_queryset(self):
         queryset = super().get_queryset()
