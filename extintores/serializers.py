@@ -6,7 +6,7 @@ Este módulo define los serializadores de Django REST Framework
 que convierten los modelos en JSON y viceversa.
 """
 from rest_framework import serializers
-from .models import Extintor
+from .models import Extintor, RevisionExtintor
 from empresas.models import Empresa
 from empresas.serializers import EmpresaSerializer
 from usuarios.models import Perfil
@@ -46,6 +46,123 @@ class CodigoUnicoPorEmpresaMixin:
                 "Ya existe un extintor con este código en la empresa seleccionada."
             )
         return value
+
+
+class RevisionExtintorSerializer(serializers.ModelSerializer):
+    extintor = serializers.PrimaryKeyRelatedField(read_only=True)
+    empresa = serializers.PrimaryKeyRelatedField(read_only=True)
+    scope_type = serializers.CharField(required=False)
+    scope_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    estado = serializers.ChoiceField(choices=RevisionExtintor.ESTADO_CHOICES, required=False)
+    tipo_servicio = serializers.ChoiceField(choices=RevisionExtintor.TIPO_SERVICIO_CHOICES, required=False)
+    respuestas_json = serializers.JSONField(required=False)
+    observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    observaciones_por_item = serializers.JSONField(required=False, allow_null=True)
+    tecnico_nombre = serializers.SerializerMethodField()
+    tecnico_email = serializers.EmailField(source='tecnico.email', read_only=True)
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
+
+    class Meta:
+        model = RevisionExtintor
+        fields = [
+            'id',
+            'extintor',
+            'empresa',
+            'empresa_nombre',
+            'tecnico',
+            'tecnico_nombre',
+            'tecnico_email',
+            'tipo_servicio',
+            'scope_type',
+            'scope_id',
+            'estado',
+            'respuestas_json',
+            'observaciones',
+            'observaciones_por_item',
+            'tiene_incidencias',
+            'payload_json',
+            'creado_en',
+            'actualizado_en',
+        ]
+        read_only_fields = [
+            'id',
+            'extintor',
+            'empresa',
+            'empresa_nombre',
+            'tecnico',
+            'tecnico_nombre',
+            'tecnico_email',
+            'tiene_incidencias',
+            'payload_json',
+            'creado_en',
+            'actualizado_en',
+        ]
+
+    def get_tecnico_nombre(self, obj):
+        if obj.tecnico:
+            perfil = getattr(obj.tecnico, 'perfil', None)
+            if perfil:
+                return perfil.nombre_completo
+            return obj.tecnico.get_full_name() or obj.tecnico.username
+        return None
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        respuestas = attrs.get('respuestas_json') or {}
+        if not isinstance(respuestas, dict):
+            raise serializers.ValidationError({'respuestas_json': 'Debe ser un objeto JSON.'})
+        observaciones_por_item = attrs.get('observaciones_por_item')
+        if observaciones_por_item is None:
+            observaciones_por_item = {}
+        if not isinstance(observaciones_por_item, dict):
+            raise serializers.ValidationError(
+                {'observaciones_por_item': 'Debe ser un objeto JSON.'}
+            )
+        extintor = self.context.get('extintor')
+        if not extintor:
+            raise serializers.ValidationError({'extintor': 'No se pudo resolver el extintor.'})
+        scope_type = attrs.get('scope_type')
+        if scope_type and scope_type != 'extintor':
+            raise serializers.ValidationError({'scope_type': 'Debe ser "extintor".'})
+        scope_id = attrs.get('scope_id')
+        if scope_id and str(scope_id) != str(extintor.id):
+            raise serializers.ValidationError({'scope_id': 'No coincide con el extintor de la URL.'})
+        attrs['scope_type'] = 'extintor'
+        attrs['scope_id'] = str(extintor.id)
+        attrs['respuestas_json'] = respuestas
+        attrs['observaciones_por_item'] = observaciones_por_item
+        if not attrs.get('observaciones') and isinstance(respuestas.get('observaciones'), str):
+            attrs['observaciones'] = respuestas.get('observaciones')
+        estado = attrs.get('estado') or RevisionExtintor.ESTADO_COMPLETADO
+        observaciones = attrs.get('observaciones') or ''
+        tiene_respuestas_negativas = any(
+            valor is False for valor in respuestas.values() if isinstance(valor, bool)
+        )
+        attrs['tiene_incidencias'] = (
+            estado == RevisionExtintor.ESTADO_CON_OBSERVACIONES
+            or bool(observaciones.strip())
+            or bool(observaciones_por_item)
+            or tiene_respuestas_negativas
+        )
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        extintor = self.context.get('extintor')
+        if not extintor:
+            raise serializers.ValidationError({'extintor': 'No se pudo resolver el extintor.'})
+
+        validated_data['extintor'] = extintor
+        validated_data['empresa'] = extintor.empresa
+        user = getattr(request, 'user', None) if request else None
+        validated_data['tecnico'] = user if user and user.is_authenticated else None
+        raw_payload = getattr(request, 'data', {}) if request else {}
+        try:
+            import copy
+            validated_data['payload_json'] = copy.deepcopy(raw_payload)
+        except Exception:
+            validated_data['payload_json'] = dict(raw_payload) if hasattr(raw_payload, 'items') else raw_payload
+        return super().create(validated_data)
 
 
 class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer):
@@ -126,26 +243,11 @@ class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer
         return None
 
     def get_revisiones(self, obj):
-        from forms.models import FormRun
-        from forms.serializers import FormRunRevisionSerializer
-
-        revisiones = (
-            FormRun.objects.filter(
-                scope_type=FormRun.SCOPE_EXTINTOR,
-                scope_id=str(obj.id),
-            )
-            .select_related('tecnico', 'template', 'empresa')
-            .order_by('-creado_en')
-        )
-        return FormRunRevisionSerializer(revisiones, many=True).data
+        revisiones = obj.revisiones.select_related('tecnico', 'empresa').all()
+        return RevisionExtintorSerializer(revisiones, many=True).data
 
     def get_revisiones_total(self, obj):
-        from forms.models import FormRun
-
-        return FormRun.objects.filter(
-            scope_type=FormRun.SCOPE_EXTINTOR,
-            scope_id=str(obj.id),
-        ).count()
+        return obj.revisiones.count()
     
     # --- NUEVOS MÉTODOS ---
     def get_creado_por_nombre(self, obj):
