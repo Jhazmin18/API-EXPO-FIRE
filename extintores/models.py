@@ -7,6 +7,7 @@ en el sistema de gestión.
 """
 import os
 import uuid
+import calendar
 import segno
 from io import BytesIO
 from urllib.parse import urlencode
@@ -418,6 +419,25 @@ class Extintor(models.Model):
             self.generar_qr()
         
         super().save(*args, **kwargs)
+
+    def _sumar_meses(self, fecha_base, meses=1):
+        """
+        Suma meses a una fecha conservando el día cuando sea posible.
+        """
+        month_index = fecha_base.month - 1 + meses
+        year = fecha_base.year + month_index // 12
+        month = month_index % 12 + 1
+        day = min(fecha_base.day, calendar.monthrange(year, month)[1])
+        return fecha_base.replace(year=year, month=month, day=day)
+
+    def registrar_revision(self, fecha_revision=None, meses_siguiente=1):
+        """
+        Actualiza las fechas del extintor después de registrar una revisión.
+        """
+        fecha_revision = fecha_revision or timezone.now().date()
+        self.ultima_revision = fecha_revision
+        self.proxima_revision = self._sumar_meses(fecha_revision, meses_siguiente)
+        self.save(update_fields=['ultima_revision', 'proxima_revision', 'updated_at'])
 
 
 class RevisionExtintor(models.Model):
