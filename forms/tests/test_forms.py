@@ -83,6 +83,29 @@ class FormsWorkflowTest(TestCase):
         self.assertEqual(run.observaciones_por_item, {'pasador': 'Falta pasador'})
         self.assertEqual(run.respuestas_json.get('fecha_proxima'), True)
 
+    def test_crea_run_sin_enviar_template_ni_empresa(self):
+        payload = {
+            'estado': FormRun.ESTADO_BORRADOR,
+            'scope_type': FormRun.SCOPE_EXTINTOR,
+            'scope_id': str(self.extintor_pqs.pk),
+            'tipo_servicio': FormRun.TIPO_UIPC,
+            'respuestas_json': {
+                'ubicacion_correcta': True,
+                'tiene_senaletica': True,
+                'tiene_seguro_metalico': True,
+                'seguro_con_marchamo': True,
+                'presion_optima': True,
+                'tiene_corbatin': False,
+                'danos_cilindro': False,
+                'vigente_mantenimiento_recarga': True,
+            },
+        }
+        response = self.client.post(self.base_url, payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        run = FormRun.objects.get(pk=response.data['id'])
+        self.assertEqual(run.template.codigo, 'UIPC_SEH')
+        self.assertEqual(run.empresa_id, self.empresa.id)
+
     def test_completar_sin_requeridos_retorna_error(self):
         respuestas = {
             'ubicacion_correcta': True,
