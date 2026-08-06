@@ -82,11 +82,46 @@ class FormTemplateSerializer(serializers.ModelSerializer):
         }
 
 
+class FormRunRevisionSerializer(serializers.ModelSerializer):
+    tecnico_nombre = serializers.SerializerMethodField()
+    tecnico_email = serializers.EmailField(source='tecnico.email', read_only=True)
+
+    class Meta:
+        model = FormRun
+        fields = (
+            'id',
+            'estado',
+            'tipo_servicio',
+            'scope_type',
+            'scope_id',
+            'respuestas_json',
+            'observaciones',
+            'observaciones_por_item',
+            'tiene_incidencias',
+            'tecnico',
+            'tecnico_nombre',
+            'tecnico_email',
+            'creado_en',
+            'actualizado_en',
+        )
+        read_only_fields = fields
+
+    def get_tecnico_nombre(self, obj):
+        if obj.tecnico:
+            perfil = getattr(obj.tecnico, 'perfil', None)
+            if perfil:
+                return perfil.nombre_completo
+            return obj.tecnico.get_full_name() or obj.tecnico.username
+        return None
+
+
 class FormRunSerializer(serializers.ModelSerializer):
     tecnico = serializers.PrimaryKeyRelatedField(read_only=True)
     template = serializers.PrimaryKeyRelatedField(queryset=FormTemplate.objects.all())
     empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all())
     respuestas_json = serializers.JSONField()
+    observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    observaciones_por_item = serializers.JSONField(required=False, allow_null=True)
 
     CONTEXTO_ESPERADO = {'agente_extintor'}
 
@@ -102,6 +137,8 @@ class FormRunSerializer(serializers.ModelSerializer):
             'scope_id',
             'tipo_servicio',
             'respuestas_json',
+            'observaciones',
+            'observaciones_por_item',
             'tiene_incidencias',
             'creado_en',
             'actualizado_en',
@@ -118,10 +155,21 @@ class FormRunSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         empresa_obj = attrs.get('empresa') or getattr(self.instance, 'empresa', None)
         empresa_id = empresa_obj.id if empresa_obj else None
-        if request and not template.is_available_for(request.user, empresa_id=empresa_id):
-            raise serializers.ValidationError(
-                {'template': 'No tienes permisos para usar esta plantilla.'}
-            )
+        user = getattr(request, 'user', None) if request else None
+        if request and user and user.is_authenticated:
+            if not template.is_available_for(user, empresa_id=empresa_id):
+                raise serializers.ValidationError(
+                    {'template': 'No tienes permisos para usar esta plantilla.'}
+                )
+        else:
+            if not template.activo:
+                raise serializers.ValidationError(
+                    {'template': 'No tienes permisos para usar esta plantilla.'}
+                )
+            if template.roles_permitidos or template.empresas_permitidas.exists():
+                raise serializers.ValidationError(
+                    {'template': 'No tienes permisos para usar esta plantilla.'}
+                )
 
         respuestas = attrs.get('respuestas_json')
         if respuestas is None:
@@ -143,14 +191,6 @@ class FormRunSerializer(serializers.ModelSerializer):
             p.clave: [op.valor for op in p.opciones.all()] for p in preguntas
         }
 
-        claves_invalidas = set(respuestas.keys()) - set(mapa_preguntas.keys()) - self.CONTEXTO_ESPERADO
-        if claves_invalidas:
-            raise serializers.ValidationError({
-                'respuestas_json': [
-                    f"Las claves {', '.join(sorted(claves_invalidas))} no existen en la plantilla."
-                ]
-            })
-
         contexto_base = {
             'respuestas': respuestas,
             'tipo_servicio': tipo_servicio,
@@ -158,12 +198,10 @@ class FormRunSerializer(serializers.ModelSerializer):
         }
 
         errores = {}
-        respuestas_limpias = {}
+        respuestas_limpias = dict(respuestas)
         for clave, valor in respuestas.items():
             pregunta = mapa_preguntas.get(clave)
             if not pregunta:
-                if clave in self.CONTEXTO_ESPERADO:
-                    respuestas_limpias[clave] = valor
                 continue
 
             aplica = self._pregunta_aplica(pregunta, contexto_base)
@@ -171,7 +209,8 @@ class FormRunSerializer(serializers.ModelSerializer):
                 continue
 
             if valor is None:
-                respuestas_limpias.pop(clave, None)
+                if pregunta.requerido or self._es_requerido_condicional(pregunta, contexto_base):
+                    errores[clave] = f"El campo '{pregunta.etiqueta}' no puede ser nulo."
                 continue
 
             try:
@@ -209,7 +248,10 @@ class FormRunSerializer(serializers.ModelSerializer):
                 requerido = pregunta.requerido or self._es_requerido_condicional(
                     pregunta, contexto_final
                 )
-                if requerido and clave not in respuestas_limpias:
+                if requerido and (
+                    clave not in respuestas_limpias
+                    or respuestas_limpias.get(clave) in [None, '', [], {}]
+                ):
                     errores_requeridos[clave] = (
                         f"El campo '{pregunta.etiqueta}' es obligatorio en estado completado."
                     )
@@ -218,13 +260,27 @@ class FormRunSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'respuestas_json': errores_requeridos})
 
         attrs['respuestas_json'] = respuestas_limpias
+        attrs['observaciones'] = attrs.get('observaciones', getattr(self.instance, 'observaciones', None))
+        observaciones_por_item = attrs.get(
+            'observaciones_por_item',
+            getattr(self.instance, 'observaciones_por_item', {}) or {},
+        )
+        if observaciones_por_item is None:
+            observaciones_por_item = {}
+        if not isinstance(observaciones_por_item, dict):
+            raise serializers.ValidationError(
+                {'observaciones_por_item': 'El campo observaciones_por_item debe ser un objeto.'}
+            )
+        attrs['observaciones_por_item'] = observaciones_por_item
         attrs['tiene_incidencias'] = self._calcular_incidencias(
             respuestas_limpias, mapa_preguntas, contexto_final
-        )
+        ) or bool((attrs.get('observaciones') or '').strip()) or bool(observaciones_por_item)
         return attrs
 
     def create(self, validated_data):
-        validated_data['tecnico'] = self.context['request'].user
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        validated_data['tecnico'] = user if user and user.is_authenticated else None
         return super().create(validated_data)
 
     def update(self, instance, validated_data):

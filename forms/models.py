@@ -183,7 +183,9 @@ class FormRun(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='formularios',
-        verbose_name='Técnico'
+        verbose_name='Técnico',
+        null=True,
+        blank=True,
     )
     estado = models.CharField('Estado', max_length=20, choices=ESTADO_CHOICES, default=ESTADO_BORRADOR)
     scope_type = models.CharField('Scope type', max_length=20, choices=SCOPE_CHOICES)
@@ -196,6 +198,8 @@ class FormRun(models.Model):
         null=True,
     )
     respuestas_json = models.JSONField('Respuestas', default=dict, blank=True)
+    observaciones = models.TextField('Observaciones', blank=True, null=True)
+    observaciones_por_item = models.JSONField('Observaciones por ítem', default=dict, blank=True)
     tiene_incidencias = models.BooleanField('Tiene incidencias', default=False)
     creado_en = models.DateTimeField('Creado en', auto_now_add=True)
     actualizado_en = models.DateTimeField('Actualizado en', auto_now=True)
