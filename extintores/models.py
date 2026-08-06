@@ -310,12 +310,12 @@ class Extintor(models.Model):
 
     def _build_label_image(self):
         # Etiqueta horizontal para cinta Brady M21 de 3/4" (19 mm).
-        scale = 2.2
-        label_width = int(620 * scale)
-        label_height = int(224 * scale)
-        margin = int(12 * scale)
-        gap = int(16 * scale)
-        qr_padding = int(4 * scale)
+        scale = 1.0
+        label_width = 620
+        label_height = 224
+        margin = 12
+        gap = 14
+        qr_padding = 4
 
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
@@ -324,7 +324,7 @@ class Extintor(models.Model):
         qr_img = Image.open(qr_buffer).convert('RGB')
 
         # Hacemos el QR un poco más compacto para darle más protagonismo al texto.
-        qr_size = int(label_height * 0.58)
+        qr_size = int(label_height * 0.55)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
@@ -336,9 +336,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(int(44 * scale), bold=True)
-        text_font = _load_font(int(34 * scale), bold=False)
-        small_font = _load_font(int(30 * scale), bold=False)
+        title_font = _load_font(60, bold=True)
+        text_font = _load_font(44, bold=False)
+        small_font = _load_font(34, bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
@@ -361,7 +361,7 @@ class Extintor(models.Model):
         )
 
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
-        y += (title_bbox[3] - title_bbox[1]) + int(12 * scale)
+        y += (title_bbox[3] - title_bbox[1]) + 10
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
@@ -370,7 +370,7 @@ class Extintor(models.Model):
         )
 
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
-        y += (text_bbox[3] - text_bbox[1]) + int(10 * scale)
+        y += (text_bbox[3] - text_bbox[1]) + 8
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
@@ -379,7 +379,7 @@ class Extintor(models.Model):
         )
 
         small_bbox = draw.textbbox((0, 0), 'Ag', font=small_font)
-        y += (small_bbox[3] - small_bbox[1]) + int(9 * scale)
+        y += (small_bbox[3] - small_bbox[1]) + 6
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
@@ -388,7 +388,7 @@ class Extintor(models.Model):
         )
 
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        y += (small_bbox[3] - small_bbox[1]) + int(9 * scale)
+        y += (small_bbox[3] - small_bbox[1]) + 6
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
