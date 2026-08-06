@@ -116,6 +116,8 @@ class FormRunRevisionSerializer(serializers.ModelSerializer):
 
 
 class FormRunSerializer(serializers.ModelSerializer):
+    DEFAULT_TEMPLATE_CODE = 'UIPC_SEH'
+
     tecnico = serializers.PrimaryKeyRelatedField(read_only=True)
     template = serializers.PrimaryKeyRelatedField(queryset=FormTemplate.objects.all(), required=False, allow_null=True)
     empresa = serializers.PrimaryKeyRelatedField(queryset=Empresa.objects.all(), required=False, allow_null=True)
@@ -151,11 +153,8 @@ class FormRunSerializer(serializers.ModelSerializer):
         scope_id = attrs.get('scope_id') or getattr(self.instance, 'scope_id', None)
         tipo_servicio = attrs.get('tipo_servicio') or getattr(self.instance, 'tipo_servicio', None)
 
-        template = attrs.get('template') or getattr(self.instance, 'template', None)
-        if not template:
-            template = self._resolver_template_por_contexto(tipo_servicio, scope_type)
-            if template:
-                attrs['template'] = template
+        template = self._resolver_template_por_contexto()
+        attrs['template'] = template
         if not template:
             raise serializers.ValidationError(
                 {'template': 'La plantilla es obligatoria.'}
@@ -323,10 +322,11 @@ class FormRunSerializer(serializers.ModelSerializer):
 
         return None
 
-    def _resolver_template_por_contexto(self, tipo_servicio, scope_type):
-        if scope_type == FormRun.SCOPE_EXTINTOR and str(tipo_servicio).lower() == FormRun.TIPO_UIPC:
-            return FormTemplate.objects.filter(codigo='UIPC_SEH', activo=True).order_by('-version').first()
-        return None
+    def _resolver_template_por_contexto(self):
+        return FormTemplate.objects.filter(
+            codigo=self.DEFAULT_TEMPLATE_CODE,
+            activo=True,
+        ).order_by('-version').first()
 
     def _resolver_agente(self, respuestas, extintor):
         agente = respuestas.get('agente_extintor')
