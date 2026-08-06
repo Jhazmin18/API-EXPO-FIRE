@@ -33,6 +33,25 @@ def qr_code_upload_to(instance, _filename):
     return f'empresas/{empresa_folder}/qr_codes/qr_{unique_id}.png'
 
 
+def _load_font(size, bold=False):
+    """
+    Carga una fuente disponible tanto en Windows como en Linux/Railway.
+    """
+    candidates = [
+        'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    ]
+    for font_path in candidates:
+        if font_path and os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
 class Extintor(models.Model):
     """
     Modelo que representa un extintor en el sistema.
@@ -312,18 +331,13 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        try:
-            title_font = ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf', int(42 * scale))
-            text_font = ImageFont.truetype('C:/Windows/Fonts/arial.ttf', int(30 * scale))
-            small_font = ImageFont.truetype('C:/Windows/Fonts/arial.ttf', int(27 * scale))
-        except OSError:
-            title_font = ImageFont.load_default()
-            text_font = ImageFont.load_default()
-            small_font = ImageFont.load_default()
+        title_font = _load_font(int(36 * scale), bold=True)
+        text_font = _load_font(int(25 * scale), bold=False)
+        small_font = _load_font(int(22 * scale), bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
-        y = margin + int(2 * scale)
+        y = qr_y
 
         def truncate_text(text, font, max_width):
             text = str(text or '')
@@ -341,7 +355,7 @@ class Extintor(models.Model):
             font=title_font,
         )
 
-        y += int(48 * scale)
+        y += int(43 * scale)
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
@@ -349,7 +363,7 @@ class Extintor(models.Model):
             font=text_font,
         )
 
-        y += int(36 * scale)
+        y += int(31 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
@@ -357,7 +371,7 @@ class Extintor(models.Model):
             font=small_font,
         )
 
-        y += int(34 * scale)
+        y += int(30 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
@@ -366,7 +380,7 @@ class Extintor(models.Model):
         )
 
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        y += int(34 * scale)
+        y += int(30 * scale)
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
