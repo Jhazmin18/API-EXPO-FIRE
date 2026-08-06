@@ -21,6 +21,7 @@ from .serializers import (
     ExtintorListSerializer,
     ExtintorPublicSerializer,
     ExtintorCreateSerializer,
+    RevisionExtintorSerializer,
 )
 
 
@@ -109,6 +110,8 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         - Resto: Requiere autenticación
         """
         if self.action in ['por_codigo', 'informacion_publica']:
+            permission_classes = [AllowAny]
+        elif self.action == 'revisiones' and self.request.method == 'POST':
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
@@ -207,6 +210,31 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(extintor)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['get', 'post'], url_path='revisiones')
+    def revisiones(self, request, pk=None):
+        """
+        GET /extintores/{id}/revisiones/ -> lista el historial de revisiones.
+        POST /extintores/{id}/revisiones/ -> crea una nueva revisión.
+        """
+        extintor = self.get_object()
+
+        if request.method == 'GET':
+            revisiones = extintor.revisiones.select_related('tecnico', 'empresa').all()
+            serializer = RevisionExtintorSerializer(revisiones, many=True)
+            return Response(serializer.data)
+
+        serializer = RevisionExtintorSerializer(
+            data=request.data,
+            context={
+                'request': request,
+                'extintor': extintor,
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+        revision = serializer.save()
+        read_serializer = RevisionExtintorSerializer(revision)
+        return Response(read_serializer.data, status=status.HTTP_201_CREATED)
+
     @action(detail=False, methods=['get'], url_path='kpis')
     def kpis(self, request):
         """

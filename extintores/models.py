@@ -418,3 +418,103 @@ class Extintor(models.Model):
             self.generar_qr()
         
         super().save(*args, **kwargs)
+
+
+class RevisionExtintor(models.Model):
+    """
+    Registro histórico de revisiones/inspecciones de un extintor.
+
+    Guarda el payload completo que envía el frontend y también los campos
+    normalizados para consulta y reportes.
+    """
+
+    ESTADO_COMPLETADO = 'completado'
+    ESTADO_CON_OBSERVACIONES = 'con_observaciones'
+    ESTADO_CHOICES = [
+        (ESTADO_COMPLETADO, 'Completado'),
+        (ESTADO_CON_OBSERVACIONES, 'Con observaciones'),
+    ]
+
+    TIPO_UIPC = 'uipc'
+    TIPO_SERVICIO_CHOICES = [
+        (TIPO_UIPC, 'UIPC'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name='ID'
+    )
+    extintor = models.ForeignKey(
+        Extintor,
+        on_delete=models.CASCADE,
+        related_name='revisiones',
+        verbose_name='Extintor',
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='revisiones_extintor',
+        verbose_name='Empresa',
+    )
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='revisiones_extintor',
+        verbose_name='Técnico',
+        null=True,
+        blank=True,
+    )
+    tipo_servicio = models.CharField(
+        max_length=20,
+        choices=TIPO_SERVICIO_CHOICES,
+        default=TIPO_UIPC,
+        verbose_name='Tipo de servicio',
+    )
+    scope_type = models.CharField(
+        max_length=20,
+        default=Extintor.__name__.lower(),
+        verbose_name='Scope type',
+    )
+    scope_id = models.CharField(
+        max_length=64,
+        db_index=True,
+        verbose_name='Scope ID',
+    )
+    estado = models.CharField(
+        max_length=30,
+        choices=ESTADO_CHOICES,
+        default=ESTADO_COMPLETADO,
+        verbose_name='Estado',
+    )
+    respuestas_json = models.JSONField(default=dict, blank=True, verbose_name='Respuestas')
+    observaciones = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+    observaciones_por_item = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Observaciones por ítem',
+    )
+    tiene_incidencias = models.BooleanField(default=False, verbose_name='Tiene incidencias')
+    payload_json = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Payload original',
+        help_text='Copia exacta del payload recibido desde el frontend.',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True, verbose_name='Creado en')
+    actualizado_en = models.DateTimeField(auto_now=True, verbose_name='Actualizado en')
+
+    class Meta:
+        db_table = 'extintores_revision'
+        ordering = ['-creado_en']
+        indexes = [
+            models.Index(fields=['extintor', 'creado_en']),
+            models.Index(fields=['empresa']),
+            models.Index(fields=['scope_type', 'scope_id']),
+            models.Index(fields=['estado']),
+            models.Index(fields=['tipo_servicio']),
+        ]
+
+    def __str__(self):
+        return f"Revision {self.tipo_servicio} - {self.extintor_id} ({self.estado})"

@@ -6,7 +6,7 @@ para facilitar la gestión de extintores.
 """
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Extintor
+from .models import Extintor, RevisionExtintor
 
 @admin.register(Extintor)
 class ExtintorAdmin(admin.ModelAdmin):
@@ -214,6 +214,37 @@ class ExtintorAdmin(admin.ModelAdmin):
             obj.qr_code = None  # Forzar regeneración
         
         super().save_model(request, obj, form, change)
+
+
+@admin.register(RevisionExtintor)
+class RevisionExtintorAdmin(admin.ModelAdmin):
+    list_display = [
+        'extintor',
+        'empresa',
+        'tipo_servicio',
+        'estado',
+        'tecnico',
+        'tiene_incidencias',
+        'creado_en',
+    ]
+    list_filter = [
+        'tipo_servicio',
+        'estado',
+        'tiene_incidencias',
+        'empresa',
+        'creado_en',
+    ]
+    search_fields = [
+        'extintor__codigo',
+        'extintor__ubicacion',
+        'scope_id',
+    ]
+    readonly_fields = [
+        'id',
+        'payload_json',
+        'creado_en',
+        'actualizado_en',
+    ]
 
 
 # Personalización del sitio de administración
