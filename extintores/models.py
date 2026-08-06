@@ -324,7 +324,7 @@ class Extintor(models.Model):
         qr_img = Image.open(qr_buffer).convert('RGB')
 
         # Hacemos el QR un poco más compacto para darle más protagonismo al texto.
-        qr_size = int(label_height * 0.55)
+        qr_size = int(label_height * 0.62)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
@@ -336,9 +336,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(60, bold=True)
-        text_font = _load_font(44, bold=False)
-        small_font = _load_font(34, bold=False)
+        title_font = _load_font(72, bold=True)
+        text_font = _load_font(54, bold=False)
+        small_font = _load_font(40, bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
