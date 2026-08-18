@@ -335,6 +335,7 @@ class Extintor(models.Model):
 
         draw = ImageDraw.Draw(combined)
         title_font = _load_font(65, bold=True)
+        text_font = _load_font(48, bold=False)
         small_font = _load_font(44, bold=False)
 
         text_x = margin + qr_size + gap + qr_padding
@@ -359,6 +360,15 @@ class Extintor(models.Model):
 
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
         y += (title_bbox[3] - title_bbox[1]) + 10
+        draw.text(
+            (text_x, y),
+            truncate_text(self.get_tipo_display(), text_font, text_width),
+            fill='#000000',
+            font=text_font,
+        )
+
+        text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
+        y += (text_bbox[3] - text_bbox[1]) + 8
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
