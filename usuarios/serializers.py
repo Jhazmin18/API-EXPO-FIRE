@@ -16,7 +16,7 @@ class PerfilSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
-    foto_perfil = serializers.SerializerMethodField()
+    foto_perfil = serializers.ImageField(required=False, allow_null=True)
     nombre_completo = serializers.CharField(read_only=True)
 
     rol = serializers.ChoiceField(
@@ -64,20 +64,22 @@ class PerfilSerializer(serializers.ModelSerializer):
             'empresa',
         ]
 
-    def get_foto_perfil(self, obj):
-        """
-        Retorna la URL absoluta para la foto de perfil cuando existe.
-        """
-        if not obj.foto_perfil:
-            return None
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.foto_perfil.url)
-        return obj.foto_perfil.url
-
     def get_user(self, obj):
         serializer = self.UserSerializer(obj.user, context=self.context)
         return serializer.data
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.foto_perfil:
+            request = self.context.get('request')
+            data['foto_perfil'] = (
+                request.build_absolute_uri(instance.foto_perfil.url)
+                if request
+                else instance.foto_perfil.url
+            )
+        else:
+            data['foto_perfil'] = None
+        return data
 
 
 class PerfilCreateSerializer(serializers.Serializer):
