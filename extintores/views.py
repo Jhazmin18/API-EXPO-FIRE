@@ -13,6 +13,7 @@ from django.http import Http404, HttpResponse
 from django.db.models import Q
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
+from PIL import Image
 from .models import Extintor
 from empresas.models import Empresa
 from usuarios.models import Perfil
@@ -118,6 +119,16 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def _describe_png_buffer(self, buffer):
+        buffer.seek(0)
+        with Image.open(buffer) as image:
+            return {
+                'width': image.width,
+                'height': image.height,
+                'dpi': image.info.get('dpi'),
+                'mode': image.mode,
+            }
     
     # --- NUEVO: Perform create para asignar creado_por ---
     def perform_create(self, serializer):
@@ -356,12 +367,29 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         Regenera el QR del extintor usando la URL actual configurada.
         """
         extintor = self.get_object()
+        diagnostico = str(request.query_params.get('diagnostico', '')).lower() in {'1', 'true', 'yes', 'si', 'sí'}
+        preview_buffer = extintor.obtener_etiqueta_png() if diagnostico else None
         extintor.regenerar_qr()
         serializer = self.get_serializer(extintor)
-        return Response({
+        response_data = {
             'detail': 'QR regenerado correctamente.',
             'extintor': serializer.data,
-        })
+        }
+
+        if diagnostico:
+            saved_buffer = BytesIO()
+            with extintor.qr_code.open('rb') as qr_file:
+                saved_buffer.write(qr_file.read())
+            saved_buffer.seek(0)
+            response_data['diagnostico_qr'] = {
+                'preview': self._describe_png_buffer(preview_buffer),
+                'guardado': self._describe_png_buffer(saved_buffer),
+                'storage_backend': extintor.qr_code.storage.__class__.__name__,
+                'nombre_archivo': extintor.qr_code.name,
+                'url': extintor.qr_code.url,
+            }
+
+        return Response(response_data)
 
     @action(detail=True, methods=['get'], url_path='qr-descargar')
     def qr_descargar(self, request, pk=None):
