@@ -309,42 +309,41 @@ class Extintor(models.Model):
         return f"{base_url}/{self.id}"
 
     def _build_label_image(self):
-        # --- DIMENSIONES EXACTAS BRADY M21-750-499 (203 DPI) ---
-        label_width = 527   # 66 mm de largo
-        label_height = 152  # 19.05 mm de alto
+        # --- DIMENSIONES PARA BRADY M21-750-499 (19.05mm x 66mm a 203 DPI) ---
+        label_width = 527   # 66 mm
+        label_height = 152  # 19.05 mm
         margin = 4
-        gap = 12
+        gap = 14
 
-        # 1. Generar QR con menor densidad de datos (Nivel L para ganar espacio/legibilidad)
+        # 1. Generar QR
         qr = segno.make(self.get_qr_url(), error='l')
         qr_buffer = BytesIO()
         qr.save(qr_buffer, kind='png', scale=6, border=1, dark='#000000', light='white')
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
-        # Tamaño del QR (Ocupa casi todo el alto de 19.05 mm)
-        qr_size = label_height - (margin * 2)  # ~144 px
+        # Ajustar QR al alto completo (~144px)
+        qr_size = label_height - (margin * 2)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
             resample_filter = Image.LANCZOS
         qr_img = qr_img.resize((qr_size, qr_size), resample_filter)
 
-        # 2. Crear lienzo horizontal completo
+        # 2. Lienzo blanco
         combined = Image.new('RGB', (label_width, label_height), 'white')
         combined.paste(qr_img, (margin, margin))
 
         draw = ImageDraw.Draw(combined)
 
-        # 3. FUENTES MUCHO MÁS GRANDES Y EN NEGRITA
-        # Cargar fuentes bold para mejorar contraste en transferencia térmica
-        title_font = _load_font(42, bold=True)  # Código bien visible
-        text_font = _load_font(32, bold=True)   # Tipo/Capacidad
-        small_font = _load_font(28, bold=True)  # Vencimiento/Ubicación
+        # 3. FUENTES MUCHO MÁS GRANDES Y EN NEGRITA (Mínimo 38px a 46px)
+        title_font = _load_font(46, bold=True)  # Código grande
+        text_font = _load_font(38, bold=True)   # Agente + Capacidad
+        small_font = _load_font(36, bold=True)  # Fecha Vencimiento
 
         text_x = margin + qr_size + gap
         text_width = label_width - text_x - margin
-        y = margin
+        y = margin + 2
 
         def truncate_text(text, font, max_width):
             text = str(text or '')
@@ -355,17 +354,16 @@ class Extintor(models.Model):
                 text = text[:-1]
             return f'{text}{ellipsis}' if text else ellipsis
 
-        # LÍNEA 1: Código (Texto principal grande)
+        # LÍNEA 1: Código (Texto principal en negrilla)
         draw.text((text_x, y), truncate_text(self.codigo, title_font, text_width), fill='black', font=title_font)
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
         y += (title_bbox[3] - title_bbox[1]) + 2
 
-        # LÍNEA 2: Tipo + Capacidad juntos para ahorrar líneas verticales
-        # Ej: "CO2 - 10kg" o "PQS - 6kg"
+        # LÍNEA 2: Agente + Capacidad
         info_agente = f"{self.get_tipo_display()} {self.capacidad}".strip()
         draw.text((text_x, y), truncate_text(info_agente, text_font, text_width), fill='black', font=text_font)
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
-        y += (text_bbox[3] - text_bbox[1]) + 4
+        y += (text_bbox[3] - text_bbox[1]) + 2
 
         # LÍNEA 3: Vencimiento
         fecha_venc = self.fecha_vencimiento.strftime('%d/%m/%Y') if self.fecha_vencimiento else 'S/F'
