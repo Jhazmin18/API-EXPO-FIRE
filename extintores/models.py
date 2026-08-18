@@ -309,20 +309,20 @@ class Extintor(models.Model):
         return f"{base_url}/{self.id}"
 
     def _build_label_image(self):
-        # Layout alineado con scripts/generar_qr_prueba_local.py (layout correcto).
-        label_width = 1240
-        label_height = 448
-        margin = 24
-        gap = 32
-        qr_padding = 8
+        # Layout compacto alineado con la etiqueta de referencia.
+        label_width = 620
+        label_height = 224
+        margin = 12
+        gap = 12
+        qr_padding = 4
 
         qr = segno.make(self.get_qr_url(), error='h')
         qr_buffer = BytesIO()
-        qr.save(qr_buffer, kind='png', scale=7, border=4, dark='#000000', light='white')
+        qr.save(qr_buffer, kind='png', scale=8, border=4, dark='#000000', light='white')
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
-        qr_size = int(label_height * 0.77)
+        qr_size = int(label_height * 0.72)
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
@@ -334,9 +334,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(65, bold=True)
-        text_font = _load_font(48, bold=False)
-        small_font = _load_font(44, bold=False)
+        title_font = _load_font(34, bold=True)
+        text_font = _load_font(22, bold=False)
+        small_font = _load_font(20, bold=False)
  
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
@@ -354,7 +354,7 @@ class Extintor(models.Model):
         draw.text(
             (text_x, y),
             truncate_text(self.codigo, title_font, text_width),
-            fill='#000000',
+            fill='#102347',
             font=title_font,
         )
 
@@ -363,7 +363,7 @@ class Extintor(models.Model):
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
-            fill='#000000',
+            fill='#333333',
             font=text_font,
         )
 
@@ -372,7 +372,7 @@ class Extintor(models.Model):
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
-            fill='#000000',
+            fill='#555555',
             font=small_font,
         )
 
@@ -381,7 +381,7 @@ class Extintor(models.Model):
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
-            fill='#000000',
+            fill='#555555',
             font=small_font,
         )
 
@@ -390,7 +390,7 @@ class Extintor(models.Model):
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
-            fill='#000000',
+            fill='#555555',
             font=small_font,
         )
         return combined
