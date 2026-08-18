@@ -309,37 +309,38 @@ class Extintor(models.Model):
         return f"{base_url}/{self.id}"
 
     def _build_label_image(self):
-        # --- DIMENSIONES EXACTAS PARA M21-750-499 (19.05mm x 66mm a 203 DPI) ---
+        # --- DIMENSIONES EXACTAS BRADY M21-750-499 (203 DPI) ---
         label_width = 527   # 66 mm de largo
-        label_height = 152  # 19.05 mm de ancho (alto del cartucho)
-        margin = 6
-        gap = 8
+        label_height = 152  # 19.05 mm de alto
+        margin = 4
+        gap = 12
 
-        # 1. Generar código QR optimizado
-        qr = segno.make(self.get_qr_url(), error='m')
+        # 1. Generar QR con menor densidad de datos (Nivel L para ganar espacio/legibilidad)
+        qr = segno.make(self.get_qr_url(), error='l')
         qr_buffer = BytesIO()
         qr.save(qr_buffer, kind='png', scale=6, border=1, dark='#000000', light='white')
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
-        # Tamaño del QR (ocupa casi todo el alto)
-        qr_size = label_height - (margin * 2)  # 140px
+        # Tamaño del QR (Ocupa casi todo el alto de 19.05 mm)
+        qr_size = label_height - (margin * 2)  # ~144 px
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
             resample_filter = Image.LANCZOS
         qr_img = qr_img.resize((qr_size, qr_size), resample_filter)
 
-        # 2. Crear lienzo de 527x152 px
+        # 2. Crear lienzo horizontal completo
         combined = Image.new('RGB', (label_width, label_height), 'white')
         combined.paste(qr_img, (margin, margin))
 
         draw = ImageDraw.Draw(combined)
 
-        # 3. Fuentes proporcionales para el lienzo de 152px de alto
-        title_font = _load_font(32, bold=True)
-        text_font = _load_font(24, bold=False)
-        small_font = _load_font(20, bold=False)
+        # 3. FUENTES MUCHO MÁS GRANDES Y EN NEGRITA
+        # Cargar fuentes bold para mejorar contraste en transferencia térmica
+        title_font = _load_font(42, bold=True)  # Código bien visible
+        text_font = _load_font(32, bold=True)   # Tipo/Capacidad
+        small_font = _load_font(28, bold=True)  # Vencimiento/Ubicación
 
         text_x = margin + qr_size + gap
         text_width = label_width - text_x - margin
@@ -354,27 +355,23 @@ class Extintor(models.Model):
                 text = text[:-1]
             return f'{text}{ellipsis}' if text else ellipsis
 
-        # Código del extintor
+        # LÍNEA 1: Código (Texto principal grande)
         draw.text((text_x, y), truncate_text(self.codigo, title_font, text_width), fill='black', font=title_font)
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
         y += (title_bbox[3] - title_bbox[1]) + 2
 
-        # Tipo / Agente
-        draw.text((text_x, y), truncate_text(self.get_tipo_display(), text_font, text_width), fill='black', font=text_font)
+        # LÍNEA 2: Tipo + Capacidad juntos para ahorrar líneas verticales
+        # Ej: "CO2 - 10kg" o "PQS - 6kg"
+        info_agente = f"{self.get_tipo_display()} {self.capacidad}".strip()
+        draw.text((text_x, y), truncate_text(info_agente, text_font, text_width), fill='black', font=text_font)
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
-        y += (text_bbox[3] - text_bbox[1]) + 2
+        y += (text_bbox[3] - text_bbox[1]) + 4
 
-        # Ubicación
-        draw.text((text_x, y), truncate_text(f'Ubic: {self.ubicacion}', small_font, text_width), fill='black', font=small_font)
-        small_bbox = draw.textbbox((0, 0), 'Ag', font=small_font)
-        y += (small_bbox[3] - small_bbox[1]) + 2
-
-        # Vencimiento
+        # LÍNEA 3: Vencimiento
         fecha_venc = self.fecha_vencimiento.strftime('%d/%m/%Y') if self.fecha_vencimiento else 'S/F'
-        draw.text((text_x, y), truncate_text(f'Vence: {fecha_venc}', small_font, text_width), fill='black', font=small_font)
+        draw.text((text_x, y), truncate_text(f'Venc: {fecha_venc}', small_font, text_width), fill='black', font=small_font)
 
         return combined
-
     def obtener_etiqueta_png(self):
         combined = self._build_label_image()
         buffer = BytesIO()
