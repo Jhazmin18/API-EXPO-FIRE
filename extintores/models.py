@@ -337,7 +337,7 @@ class Extintor(models.Model):
         title_font = _load_font(65, bold=True)
         text_font = _load_font(48, bold=False)
         small_font = _load_font(44, bold=False)
-
+ 
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
         y = qr_y
