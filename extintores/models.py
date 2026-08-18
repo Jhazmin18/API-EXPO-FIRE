@@ -309,38 +309,37 @@ class Extintor(models.Model):
         return f"{base_url}/{self.id}"
 
     def _build_label_image(self):
-        # --- DIMENSIONES PARA BRADY M211 (203 DPI) ---
-        # Para cinta continua de 19mm (0.75") y etiqueta de 50mm de largo:
-        label_width = 400   # ~50 mm
-        label_height = 152  # ~19 mm (Ancho real imprimible de la cinta)
-        margin = 4
-        gap = 4
+        # --- DIMENSIONES EXACTAS PARA M21-750-499 (19.05mm x 66mm a 203 DPI) ---
+        label_width = 527   # 66 mm de largo
+        label_height = 152  # 19.05 mm de ancho (alto del cartucho)
+        margin = 6
+        gap = 8
 
-        # 1. Generar el QR
-        qr = segno.make(self.get_qr_url(), error='m')  # 'm' ahorra espacio
+        # 1. Generar código QR optimizado
+        qr = segno.make(self.get_qr_url(), error='m')
         qr_buffer = BytesIO()
-        qr.save(qr_buffer, kind='png', scale=4, border=1, dark='#000000', light='white')
+        qr.save(qr_buffer, kind='png', scale=6, border=1, dark='#000000', light='white')
         qr_buffer.seek(0)
         qr_img = Image.open(qr_buffer).convert('RGB')
 
-        # Tamaño del QR (ocupa casi todo el alto disponible)
-        qr_size = label_height - (margin * 2)
+        # Tamaño del QR (ocupa casi todo el alto)
+        qr_size = label_height - (margin * 2)  # 140px
         try:
             resample_filter = Image.Resampling.LANCZOS
         except AttributeError:
             resample_filter = Image.LANCZOS
         qr_img = qr_img.resize((qr_size, qr_size), resample_filter)
 
-        # 2. Crear lienzo
+        # 2. Crear lienzo de 527x152 px
         combined = Image.new('RGB', (label_width, label_height), 'white')
         combined.paste(qr_img, (margin, margin))
 
         draw = ImageDraw.Draw(combined)
-        
-        # 3. Tamaños de fuente ajustados a 152px de alto total
-        title_font = _load_font(28, bold=True)
-        text_font = _load_font(20, bold=False)
-        small_font = _load_font(18, bold=False)
+
+        # 3. Fuentes proporcionales para el lienzo de 152px de alto
+        title_font = _load_font(32, bold=True)
+        text_font = _load_font(24, bold=False)
+        small_font = _load_font(20, bold=False)
 
         text_x = margin + qr_size + gap
         text_width = label_width - text_x - margin
@@ -360,7 +359,7 @@ class Extintor(models.Model):
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
         y += (title_bbox[3] - title_bbox[1]) + 2
 
-        # Agente Extintor
+        # Tipo / Agente
         draw.text((text_x, y), truncate_text(self.get_tipo_display(), text_font, text_width), fill='black', font=text_font)
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
         y += (text_bbox[3] - text_bbox[1]) + 2
@@ -375,7 +374,6 @@ class Extintor(models.Model):
         draw.text((text_x, y), truncate_text(f'Vence: {fecha_venc}', small_font, text_width), fill='black', font=small_font)
 
         return combined
-
 
     def obtener_etiqueta_png(self):
         combined = self._build_label_image()
