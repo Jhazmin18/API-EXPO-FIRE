@@ -334,13 +334,13 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(34, bold=True)
-        text_font = _load_font(22, bold=False)
-        small_font = _load_font(20, bold=False)
+        title_font = _load_font(41, bold=True)
+        text_font = _load_font(27, bold=False)
+        small_font = _load_font(24, bold=False)
  
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
-        y = qr_y
+        y = qr_y + 4
 
         def truncate_text(text, font, max_width):
             text = str(text or '')
@@ -359,7 +359,7 @@ class Extintor(models.Model):
         )
 
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
-        y += (title_bbox[3] - title_bbox[1]) + 10
+        y += (title_bbox[3] - title_bbox[1]) + 12
         draw.text(
             (text_x, y),
             truncate_text(self.get_tipo_display(), text_font, text_width),
@@ -368,7 +368,7 @@ class Extintor(models.Model):
         )
 
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
-        y += (text_bbox[3] - text_bbox[1]) + 8
+        y += (text_bbox[3] - text_bbox[1]) + 10
         draw.text(
             (text_x, y),
             truncate_text(f'Ubicacion: {self.ubicacion}', small_font, text_width),
@@ -377,7 +377,7 @@ class Extintor(models.Model):
         )
 
         small_bbox = draw.textbbox((0, 0), 'Ag', font=small_font)
-        y += (small_bbox[3] - small_bbox[1]) + 6
+        y += (small_bbox[3] - small_bbox[1]) + 8
         draw.text(
             (text_x, y),
             truncate_text(f'Capacidad: {self.capacidad}', small_font, text_width),
@@ -386,7 +386,7 @@ class Extintor(models.Model):
         )
 
         fecha_venc = self.fecha_vencimiento.strftime('%Y-%m-%d') if self.fecha_vencimiento else 'Sin fecha'
-        y += (small_bbox[3] - small_bbox[1]) + 6
+        y += (small_bbox[3] - small_bbox[1]) + 8
         draw.text(
             (text_x, y),
             truncate_text(f'Vence: {fecha_venc}', small_font, text_width),
