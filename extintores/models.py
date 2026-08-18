@@ -334,9 +334,9 @@ class Extintor(models.Model):
         combined.paste(qr_img, (margin, qr_y))
 
         draw = ImageDraw.Draw(combined)
-        title_font = _load_font(41, bold=True)
-        text_font = _load_font(27, bold=False)
-        small_font = _load_font(24, bold=False)
+        title_font = _load_font(51, bold=True)
+        text_font = _load_font(37, bold=False)
+        small_font = _load_font(34, bold=False)
  
         text_x = margin + qr_size + gap + qr_padding
         text_width = label_width - text_x - margin
