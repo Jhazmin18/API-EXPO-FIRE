@@ -349,9 +349,9 @@ class Extintor(models.Model):
         draw = ImageDraw.Draw(combined)
 
         # 3. FUENTES MUCHO MÁS GRANDES Y EN NEGRITA (Mínimo 38px a 46px)
-        title_font = _load_font(46, bold=True)  # Código grande
-        text_font = _load_font(38, bold=True)   # Agente + Capacidad
-        small_font = _load_font(36, bold=True)  # Fecha Vencimiento
+        title_font = _load_font(26, bold=True)  # Código grande
+        text_font = _load_font(18, bold=True)   # Agente + Capacidad
+        small_font = _load_font(16, bold=True)  # Fecha Vencimiento
 
         text_x = margin + qr_size + gap
         text_width = label_width - text_x - margin
