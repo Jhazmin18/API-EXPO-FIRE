@@ -33,27 +33,42 @@ def qr_code_upload_to(instance, _filename):
     return f'empresas/{empresa_folder}/qr_codes/qr_{unique_id}.png'
 
 
+import os
+from django.conf import settings
+
 def _load_font(size, bold=False):
     """
-    Carga una fuente disponible tanto en Windows como en Linux/Railway.
+    Carga una fuente TrueType. Prioriza una fuente empaquetada con el proyecto
+    (garantiza que exista igual en local, Windows y Railway) y usa las del
+    sistema operativo solo como respaldo.
     """
+    filename = 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'
+
     candidates = [
-        'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf',
-        'LiberationSans-Bold.ttf' if bold else 'LiberationSans-Regular.ttf',
+        # 1. Fuente empaquetada en el proyecto (la más confiable)
+        os.path.join(settings.BASE_DIR, 'static', 'fonts', filename),
+        # 2. Rutas del sistema (Linux / Railway)
+        f'/usr/share/fonts/truetype/dejavu/{filename}',
+        f'/usr/share/fonts/truetype/liberation2/{"LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"}',
+        # 3. Windows (para desarrollo local)
         'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
-        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
     ]
+
     for font_path in candidates:
-        if not font_path:
-            continue
         try:
             if os.path.isabs(font_path) and not os.path.exists(font_path):
                 continue
             return ImageFont.truetype(font_path, size)
         except OSError:
             continue
+
+    # Si llega aquí, ninguna fuente TTF cargó — avisa en los logs en vez de
+    # fallar en silencio con una fuente diminuta que ignora `size`.
+    import logging
+    logging.getLogger(__name__).error(
+        "No se pudo cargar ninguna fuente TrueType; usando fuente por defecto de PIL (tamaño fijo, ignora size=%s)",
+        size
+    )
     return ImageFont.load_default()
 
 
