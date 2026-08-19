@@ -38,23 +38,23 @@ from django.conf import settings
 
 def _load_font(size, bold=False):
     """
-    Carga una fuente TrueType. Prioriza una fuente empaquetada con el proyecto
-    (garantiza que exista igual en local, Windows y Railway) y usa las del
-    sistema operativo solo como respaldo.
+    Carga una fuente disponible tanto en Windows como en Linux/Railway.
+    Prioriza la fuente empacada en el repo para no depender de lo que
+    tenga instalado el sistema operativo del contenedor.
     """
-    filename = 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'
+    font_file = 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'
+    project_font = os.path.join(settings.BASE_DIR, 'static', 'fonts', font_file)
 
     candidates = [
-        # 1. Fuente empaquetada en el proyecto (la más confiable)
-        os.path.join(settings.BASE_DIR, 'static', 'fonts', filename),
-        # 2. Rutas del sistema (Linux / Railway)
-        f'/usr/share/fonts/truetype/dejavu/{filename}',
-        f'/usr/share/fonts/truetype/liberation2/{"LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"}',
-        # 3. Windows (para desarrollo local)
+        project_font,
         'C:/Windows/Fonts/arialbd.ttf' if bold else 'C:/Windows/Fonts/arial.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
     ]
-
     for font_path in candidates:
+        if not font_path:
+            continue
         try:
             if os.path.isabs(font_path) and not os.path.exists(font_path):
                 continue
@@ -62,15 +62,12 @@ def _load_font(size, bold=False):
         except OSError:
             continue
 
-    # Si llega aquí, ninguna fuente TTF cargó — avisa en los logs en vez de
-    # fallar en silencio con una fuente diminuta que ignora `size`.
-    import logging
-    logging.getLogger(__name__).error(
-        "No se pudo cargar ninguna fuente TrueType; usando fuente por defecto de PIL (tamaño fijo, ignora size=%s)",
-        size
+    # Antes esto caía en ImageFont.load_default() en silencio, que ignora
+    # 'size' por completo y produce etiquetas ilegibles. Mejor fallar fuerte.
+    raise RuntimeError(
+        f"No se encontró ninguna fuente TrueType válida (tamaño={size}, bold={bold}). "
+        f"Verifica que {project_font} exista en el contenedor."
     )
-    return ImageFont.load_default()
-
 
 class Extintor(models.Model):
     """
