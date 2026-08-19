@@ -350,7 +350,7 @@ class Extintor(models.Model):
 
         # 3. FUENTES MUCHO MÁS GRANDES Y EN NEGRITA (Mínimo 38px a 46px)
         title_font = _load_font(26, bold=True)  # Código grande
-        text_font = _load_font(18, bold=True)   # Agente + Capacidad
+        text_font = _load_font(18, bold=True)   # Ubicacion + Capacidad
         small_font = _load_font(16, bold=True)  # Fecha Vencimiento
 
         text_x = margin + qr_size + gap
@@ -371,15 +371,19 @@ class Extintor(models.Model):
         title_bbox = draw.textbbox((0, 0), 'Ag', font=title_font)
         y += (title_bbox[3] - title_bbox[1]) + 2
 
-        # LÍNEA 2: Agente + Capacidad
-        info_agente = f"{self.get_tipo_display()} {self.capacidad}".strip()
-        draw.text((text_x, y), truncate_text(info_agente, text_font, text_width), fill='black', font=text_font)
+        # LÍNEA 2: Ubicacion
+        draw.text((text_x, y), truncate_text(f'Ubicacion: {self.ubicacion}', text_font, text_width), fill='black', font=text_font)
         text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
         y += (text_bbox[3] - text_bbox[1]) + 2
 
-        # LÍNEA 3: Vencimiento
+        # LÍNEA 3: Capacidad
+        draw.text((text_x, y), truncate_text(f'Capacidad: {self.capacidad}', text_font, text_width), fill='black', font=text_font)
+        text_bbox = draw.textbbox((0, 0), 'Ag', font=text_font)
+        y += (text_bbox[3] - text_bbox[1]) + 2
+
+        # LÍNEA 4: Vencimiento
         fecha_venc = self.fecha_vencimiento.strftime('%d/%m/%Y') if self.fecha_vencimiento else 'S/F'
-        draw.text((text_x, y), truncate_text(f'Venc: {fecha_venc}', small_font, text_width), fill='black', font=small_font)
+        draw.text((text_x, y), truncate_text(f'Vence: {fecha_venc}', small_font, text_width), fill='black', font=small_font)
 
         return combined
     def obtener_etiqueta_png(self):
