@@ -59,6 +59,8 @@ class RevisionExtintorTest(TestCase):
         self.assertIsNone(revision.tecnico)
         self.assertEqual(revision.payload_json['tipo_servicio'], 'uipc')
         self.assertEqual(revision.payload_json['scope_id'], str(self.extintor.id))
+        self.assertTrue(revision.pdf_uipc)
+        self.assertTrue(revision.pdf_uipc.name.endswith('.pdf'))
 
         self.extintor.refresh_from_db()
         expected_next = self.extintor._sumar_meses(date.today(), 1)

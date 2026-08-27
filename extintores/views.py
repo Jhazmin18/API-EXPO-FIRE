@@ -9,9 +9,12 @@ from rest_framework import viewsets, filters, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.conf import settings
+from django.core.mail import EmailMessage
 from django.http import Http404, HttpResponse
 from django.db.models import Q
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 from PIL import Image
 from .models import Extintor
@@ -249,7 +252,36 @@ class ExtintorViewSet(viewsets.ModelViewSet):
         revision = serializer.save()
         extintor.registrar_revision(revision.creado_en.date(), meses_siguiente=1)
         read_serializer = RevisionExtintorSerializer(revision)
-        return Response(read_serializer.data, status=status.HTTP_201_CREATED)
+
+        email_status = {'enviado': False, 'destinatarios': []}
+        destinatarios = getattr(settings, 'UIPC_PDF_RECIPIENTS', [])
+        if revision.pdf_uipc and destinatarios:
+            try:
+                with revision.pdf_uipc.open('rb') as pdf_file:
+                    attachment_bytes = pdf_file.read()
+                email = EmailMessage(
+                    subject=f'UIPC generada - {extintor.codigo}',
+                    body=(
+                        f'Se generó una nueva UIPC para el extintor {extintor.codigo}.\n'
+                        f'Folio: {revision.id.hex[:8].upper()}\n'
+                        f'Fecha: {revision.creado_en.strftime("%d/%m/%Y %H:%M") if revision.creado_en else ""}'
+                    ),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'webmaster@localhost'),
+                    to=destinatarios,
+                )
+                email.attach(
+                    Path(revision.pdf_uipc.name).name,
+                    attachment_bytes,
+                    'application/pdf',
+                )
+                email.send(fail_silently=False)
+                email_status = {'enviado': True, 'destinatarios': destinatarios}
+            except Exception as exc:
+                email_status = {'enviado': False, 'error': str(exc), 'destinatarios': destinatarios}
+
+        response_data = read_serializer.data
+        response_data['correo_pdf'] = email_status
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='kpis')
     def kpis(self, request):
