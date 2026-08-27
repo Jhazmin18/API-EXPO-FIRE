@@ -60,6 +60,11 @@ LEADS_TO_EMAIL = [
     for email in os.getenv('LEADS_TO_EMAIL', 'anayajhaz18@gmail.com').split(',')
     if email.strip()
 ]
+UIPC_PDF_RECIPIENTS = [
+    email.strip()
+    for email in os.getenv('UIPC_PDF_RECIPIENTS', 'anayajhaz18@gmail.com').split(',')
+    if email.strip()
+]
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
 AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', '')

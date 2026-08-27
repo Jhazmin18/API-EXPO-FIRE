@@ -18,6 +18,12 @@ from django.utils.functional import cached_property
 from django.utils import timezone
 from datetime import timedelta
 from PIL import Image, ImageDraw, ImageFont
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from empresas.models import Empresa
 
@@ -31,6 +37,13 @@ def qr_code_upload_to(instance, _filename):
     empresa_folder = f'empresa_{empresa_id}' if empresa_id else 'empresa_sin_asignar'
     unique_id = uuid.uuid4().hex
     return f'empresas/{empresa_folder}/qr_codes/qr_{unique_id}.png'
+
+
+def revision_pdf_upload_to(instance, _filename):
+    empresa_id = getattr(instance.extintor, 'empresa_id', None) if getattr(instance, 'extintor_id', None) else None
+    empresa_folder = f'empresa_{empresa_id}' if empresa_id else 'empresa_sin_asignar'
+    extintor_id = getattr(instance, 'extintor_id', 'sin_extintor')
+    return f'empresas/{empresa_folder}/uipc_pdfs/uipc_{extintor_id}_{uuid.uuid4().hex}.pdf'
 
 
 import os
@@ -533,6 +546,12 @@ class RevisionExtintor(models.Model):
         verbose_name='Payload original',
         help_text='Copia exacta del payload recibido desde el frontend.',
     )
+    pdf_uipc = models.FileField(
+        upload_to=revision_pdf_upload_to,
+        blank=True,
+        null=True,
+        verbose_name='PDF UIPC',
+    )
     creado_en = models.DateTimeField(auto_now_add=True, verbose_name='Creado en')
     actualizado_en = models.DateTimeField(auto_now=True, verbose_name='Actualizado en')
 
@@ -549,3 +568,333 @@ class RevisionExtintor(models.Model):
 
     def __str__(self):
         return f"Revision {self.tipo_servicio} - {self.extintor_id} ({self.estado})"
+
+    def _format_bool(self, value):
+        return 'Si' if value is True else 'No' if value is False else '-'
+
+    def _uipc_sections(self):
+        return [
+            (
+                'Ubicación y accesibilidad',
+                [
+                    {
+                        'key': 'visible_legible_accesible',
+                        'label': '¿El extintor está visible, legible y accesible, sin obstrucciones?',
+                        'norma': 'NOM-002-STPS-2010 §4.1',
+                        'aliases': ['visible_legible_accesible', 'visible', 'accesible', 'obstrucciones'],
+                    },
+                    {
+                        'key': 'lugar_asignado',
+                        'label': '¿El extintor se encuentra en el lugar asignado (soporte o nicho)?',
+                        'norma': 'NOM-002-STPS-2010 §4.2',
+                        'aliases': ['lugar_asignado', 'soporte_nicho', 'ubicacion_correcta'],
+                    },
+                    {
+                        'key': 'senalizacion',
+                        'label': '¿La señalización del extintor está visible y en buen estado?',
+                        'norma': 'NOM-026-STPS-2008',
+                        'aliases': ['senalizacion', 'señalizacion', 'seÃ±alizacion', 'senal_visible'],
+                    },
+                ],
+            ),
+            (
+                'Condición del equipo',
+                [
+                    {
+                        'key': 'manometro',
+                        'label': '¿El manómetro indica presión correcta (aguja en zona verde)?',
+                        'norma': 'NOM-154-SCFI-2005 §7.3',
+                        'aliases': ['manometro', 'manómetro', 'presion_correcta'],
+                    },
+                    {
+                        'key': 'pasador',
+                        'label': '¿El pasador de seguridad está en su lugar e intacto?',
+                        'norma': 'NOM-154-SCFI-2005 §7.4',
+                        'aliases': ['pasador', 'pasador_intacto'],
+                    },
+                    {
+                        'key': 'precinto',
+                        'label': '¿El precinto de seguridad está intacto (sin señales de uso)?',
+                        'norma': 'NOM-154-SCFI-2005 §7.4',
+                        'aliases': ['precinto', 'precinto_intacto', 'sello'],
+                    },
+                    {
+                        'key': 'cuerpo',
+                        'label': '¿El cuerpo del extintor está en buen estado (sin golpes, corrosión ni deformaciones)?',
+                        'norma': 'NOM-154-SCFI-2005 §7.5',
+                        'aliases': ['cuerpo', 'cuerpo_buen_estado', 'sin_golpes'],
+                    },
+                    {
+                        'key': 'manguera',
+                        'label': '¿La manguera, boquilla y válvula están en buen estado y sin obstrucciones?',
+                        'norma': 'NOM-154-SCFI-2005 §7.6',
+                        'aliases': ['manguera', 'boquilla', 'valvula', 'válvula'],
+                    },
+                ],
+            ),
+            (
+                'Vigencia y documentación',
+                [
+                    {
+                        'key': 'etiqueta',
+                        'label': '¿La etiqueta de mantenimiento está presente y vigente?',
+                        'norma': 'NOM-154-SCFI-2005 §8',
+                        'aliases': ['etiqueta', 'etiqueta_mantenimiento', 'mantenimiento_vigente'],
+                    },
+                    {
+                        'key': 'fecha_proximo_mantenimiento',
+                        'label': '¿La fecha de próximo mantenimiento está vigente?',
+                        'norma': 'NOM-002-STPS-2010 §6.3',
+                        'aliases': ['fecha_proximo_mantenimiento', 'fecha_proxima', 'proximo_mantenimiento', 'proxima_revision'],
+                    },
+                ],
+            ),
+        ]
+
+    def _resolve_uipc_answer(self, respuestas, question):
+        aliases = [question['key'], *question.get('aliases', [])]
+        for key in aliases:
+            if key in respuestas:
+                return respuestas.get(key)
+        return None
+
+    def _render_uipc_question(self, pregunta, respuesta, observaciones_por_item, body_style, small_style):
+        if isinstance(respuesta, bool):
+            response_text = 'Sí' if respuesta else 'No'
+            response_color = '#166534' if respuesta else '#B45309'
+        elif respuesta in (None, ''):
+            response_text = '-'
+            response_color = '#6B7280'
+        else:
+            response_text = str(respuesta)
+            response_color = '#374151'
+
+        observacion = observaciones_por_item.get(pregunta['key'])
+        if observacion in (None, '') and not bool(respuesta):
+            observacion = observaciones_por_item.get(pregunta['label'])
+
+        left_parts = [
+            f"<b>{pregunta['label']}</b>",
+            f"<font size='8' color='#6B7280'>{pregunta['norma']}</font>",
+        ]
+        if observacion:
+            if respuesta is False:
+                left_parts.append("<font size='8' color='#FF7F00'><b>¿Por qué no cumple este punto?</b></font>")
+            left_parts.append(f"<font size='8' color='#B45309'>Observación: {observacion}</font>")
+
+        left_para = Paragraph('<br/>'.join(left_parts), body_style)
+        right_para = Paragraph(
+            f"<font color='{response_color}'><b>{response_text}</b></font>",
+            small_style,
+        )
+        return [left_para, right_para]
+
+    def _build_uipc_pdf(self):
+        buffer = BytesIO()
+        accent = colors.HexColor('#FF7F00')
+        accent_dark = colors.HexColor('#B45309')
+        muted = colors.HexColor('#6B7280')
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=18 * mm,
+            rightMargin=18 * mm,
+            topMargin=18 * mm,
+            bottomMargin=18 * mm,
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'UIPCTitle',
+            parent=styles['Title'],
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            leading=22,
+            textColor=colors.HexColor('#111827'),
+            alignment=TA_LEFT,
+            spaceAfter=4,
+        )
+        subtitle_style = ParagraphStyle(
+            'UIPCSubtitle',
+            parent=styles['BodyText'],
+            fontName='Helvetica',
+            fontSize=9,
+            leading=11,
+            textColor=muted,
+            spaceAfter=4,
+        )
+        section_style = ParagraphStyle(
+            'UIPCSection',
+            parent=styles['Heading2'],
+            fontName='Helvetica-Bold',
+            fontSize=10.5,
+            leading=13,
+            textColor=colors.HexColor('#374151'),
+            spaceBefore=7,
+            spaceAfter=4,
+        )
+        body_style = ParagraphStyle(
+            'UIPCBody',
+            parent=styles['BodyText'],
+            fontName='Helvetica',
+            fontSize=8.7,
+            leading=10.5,
+            textColor=colors.HexColor('#111827'),
+        )
+        small_style = ParagraphStyle(
+            'UIPCSmall',
+            parent=styles['BodyText'],
+            fontName='Helvetica',
+            fontSize=8.5,
+            leading=10,
+            textColor=colors.HexColor('#111827'),
+            alignment=TA_LEFT,
+        )
+        note_style = ParagraphStyle(
+            'UIPCNote',
+            parent=styles['BodyText'],
+            fontName='Helvetica',
+            fontSize=9,
+            leading=11,
+            textColor=accent_dark,
+        )
+
+        respuestas = self.respuestas_json or {}
+        observaciones_item = self.observaciones_por_item or {}
+        observaciones_generales = (self.observaciones or '').strip() or str(respuestas.get('observaciones') or '').strip()
+        ext = self.extintor
+        empresa = self.empresa
+        tecnico = self.tecnico
+        creado_en = self.creado_en
+        fecha_documento = creado_en.strftime('%d/%m/%Y %H:%M') if creado_en else timezone.now().strftime('%d/%m/%Y %H:%M')
+        fecha_archivo = creado_en.strftime('%Y%m%d') if creado_en else timezone.now().strftime('%Y%m%d')
+        folio = f'UIPC-{fecha_archivo}-{self.id.hex[:8].upper()}'
+
+        story = []
+        story.append(Paragraph('UIPC de Extintor', title_style))
+        story.append(Paragraph('Documento generado automaticamente a partir del registro de revision.', subtitle_style))
+        story.append(Paragraph(f'Folio: {folio}', subtitle_style))
+        story.append(Paragraph(f'Fecha de generacion: {fecha_documento}', subtitle_style))
+        story.append(Spacer(1, 3 * mm))
+
+        summary_rows = [
+            ['Extintor', ext.codigo if ext else '-'],
+            ['Empresa', empresa.nombre if empresa else '-'],
+            ['Ubicacion', ext.ubicacion if ext else '-'],
+            ['Fecha de revision', creado_en.strftime('%d/%m/%Y %H:%M') if creado_en else '-'],
+            ['Tecnico', tecnico.get_full_name() if tecnico and tecnico.get_full_name() else (tecnico.username if tecnico else '-')],
+            ['Estado', self.estado.replace('_', ' ').title()],
+            ['Incidencias', 'Sí' if self.tiene_incidencias else 'No'],
+        ]
+        summary = Table(summary_rows, colWidths=[42 * mm, 118 * mm])
+        summary.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F9FAFB')),
+            ('LINEBEFORE', (0, 0), (0, -1), 1.2, accent),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#374151')),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.8),
+            ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#E5E7EB')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.append(summary)
+
+        for section_title, preguntas in self._uipc_sections():
+            story.append(Spacer(1, 4 * mm))
+            story.append(Paragraph(section_title, section_style))
+
+            rows = [['Pregunta', 'Respuesta']]
+            for pregunta in preguntas:
+                respuesta = self._resolve_uipc_answer(respuestas, pregunta)
+                rows.append(self._render_uipc_question(pregunta, respuesta, observaciones_item, body_style, small_style))
+
+            table = Table(rows, colWidths=[124 * mm, 36 * mm], repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F3F4F6')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#374151')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8.2),
+                ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#D1D5DB')),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ]))
+            story.append(table)
+
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph('Observaciones adicionales', section_style))
+        if observaciones_generales:
+            story.append(Paragraph(observaciones_generales, note_style))
+        else:
+            story.append(Paragraph('Sin observaciones adicionales.', note_style))
+
+        story.append(Spacer(1, 6 * mm))
+        footer_rows = [[
+            Paragraph(
+                'EXPRO FIRE',
+                ParagraphStyle(
+                    'FooterBrand',
+                    parent=body_style,
+                    fontName='Helvetica-Bold',
+                    textColor=accent,
+                    fontSize=10,
+                ),
+            ),
+            Paragraph(
+                'Revision UIPC generada desde el sistema',
+                ParagraphStyle(
+                    'FooterText',
+                    parent=body_style,
+                    alignment=TA_LEFT,
+                    textColor=colors.HexColor('#6B7280'),
+                ),
+            ),
+        ]]
+        footer = Table(footer_rows, colWidths=[35 * mm, 125 * mm])
+        footer.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+            ('LINEABOVE', (0, 0), (-1, 0), 0.6, accent),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(footer)
+
+        def draw_page(canvas, doc):
+            canvas.saveState()
+            width, height = A4
+            canvas.setFillColor(colors.white)
+            canvas.rect(0, 0, width, height, stroke=0, fill=1)
+            canvas.setFillColor(colors.HexColor('#E5E7EB'))
+            canvas.rect(0, 0, width, 3, stroke=0, fill=1)
+            canvas.setFillColor(accent)
+            canvas.setFont('Helvetica-Bold', 10)
+            canvas.drawString(doc.leftMargin, height - 19, 'EXPRO FIRE')
+            canvas.setFont('Helvetica', 8)
+            canvas.drawRightString(width - doc.rightMargin, height - 18, fecha_documento)
+            canvas.drawRightString(width - doc.rightMargin, height - 28, folio)
+            canvas.drawRightString(width - doc.rightMargin, 10, f'Pagina {canvas.getPageNumber()}')
+            canvas.restoreState()
+
+        doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
+        buffer.seek(0)
+        return buffer
+
+    def generar_pdf_uipc(self, save=True):
+        if not self.pk:
+            raise ValueError('La revision debe estar guardada antes de generar el PDF.')
+
+        pdf_buffer = self._build_uipc_pdf()
+        fecha_archivo = self.creado_en.strftime('%Y%m%d') if self.creado_en else timezone.now().strftime('%Y%m%d')
+        filename = f'uipc_{self.extintor_id}_{fecha_archivo}_{self.id.hex[:8].upper()}.pdf'
+        self.pdf_uipc.save(filename, ContentFile(pdf_buffer.getvalue()), save=False)
+        pdf_buffer.close()
+
+        if save:
+            super().save(update_fields=['pdf_uipc', 'actualizado_en'])

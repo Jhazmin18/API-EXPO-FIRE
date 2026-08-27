@@ -58,6 +58,7 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
     respuestas_json = serializers.JSONField(required=False)
     observaciones = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     observaciones_por_item = serializers.JSONField(required=False, allow_null=True)
+    pdf_uipc_url = serializers.SerializerMethodField()
     tecnico_nombre = serializers.SerializerMethodField()
     tecnico_email = serializers.EmailField(source='tecnico.email', read_only=True)
     empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
@@ -79,6 +80,8 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
             'respuestas_json',
             'observaciones',
             'observaciones_por_item',
+            'pdf_uipc',
+            'pdf_uipc_url',
             'tiene_incidencias',
             'payload_json',
             'creado_en',
@@ -92,6 +95,8 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
             'tecnico',
             'tecnico_nombre',
             'tecnico_email',
+            'pdf_uipc',
+            'pdf_uipc_url',
             'tiene_incidencias',
             'payload_json',
             'creado_en',
@@ -106,6 +111,14 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
             return obj.tecnico.get_full_name() or obj.tecnico.username
         return None
 
+    def get_pdf_uipc_url(self, obj):
+        if obj.pdf_uipc:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.pdf_uipc.url)
+            return obj.pdf_uipc.url
+        return None
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         respuestas = attrs.get('respuestas_json') or {}
@@ -115,9 +128,7 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
         if observaciones_por_item is None:
             observaciones_por_item = {}
         if not isinstance(observaciones_por_item, dict):
-            raise serializers.ValidationError(
-                {'observaciones_por_item': 'Debe ser un objeto JSON.'}
-            )
+            raise serializers.ValidationError({'observaciones_por_item': 'Debe ser un objeto JSON.'})
         extintor = self.context.get('extintor')
         if not extintor:
             raise serializers.ValidationError({'extintor': 'No se pudo resolver el extintor.'})
@@ -162,7 +173,9 @@ class RevisionExtintorSerializer(serializers.ModelSerializer):
             validated_data['payload_json'] = copy.deepcopy(raw_payload)
         except Exception:
             validated_data['payload_json'] = dict(raw_payload) if hasattr(raw_payload, 'items') else raw_payload
-        return super().create(validated_data)
+        revision = super().create(validated_data)
+        revision.generar_pdf_uipc()
+        return revision
 
 
 class ExtintorSerializer(CodigoUnicoPorEmpresaMixin, serializers.ModelSerializer):
